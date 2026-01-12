@@ -18,6 +18,10 @@ public class Board : MonoBehaviour {
     public GameObject tilePrefab;
     public GameObject[] dots;
     
+    [Header("Score")]
+    public ScoreManager scoreManager;
+    public int scorePerDot = 20; // Points per animal destroyed
+
     public GameObject[,] allDots;
     public GameState currentState = GameState.move;
     
@@ -103,8 +107,6 @@ public class Board : MonoBehaviour {
         return false;
     }
 
-    // ---------------- DESTRUCTION & GRAVITY LOOP ----------------
-
     public void DestroyMatches() {
         StartCoroutine(DestroyMatchesCo());
     }
@@ -114,18 +116,13 @@ public class Board : MonoBehaviour {
         
         bool matchesExist = true;
         while (matchesExist) {
-            // 1. Destroy Matches
             DestroyMatchesAt();
             yield return new WaitForSeconds(.4f);
 
-            // 2. Gravity (Fall)
             DecreaseRow();
-            
-            // 3. Refill
             RefillBoard();
             yield return new WaitForSeconds(.4f);
 
-            // 4. Check for New Matches (Cascade)
             matchesExist = false;
             for (int i = 0; i < width; i++) {
                 for (int j = 0; j < height; j++) {
@@ -154,6 +151,12 @@ public class Board : MonoBehaviour {
 
     private void DestroyMatchesAt(int column, int row) {
         if (allDots[column, row].GetComponent<Dot>().isMatched) {
+            
+            // SCORE UPDATE (NEW)
+            if(scoreManager != null) {
+                scoreManager.IncreaseScore(scorePerDot);
+            }
+            
             Destroy(allDots[column, row]);
             allDots[column, row] = null;
         }
@@ -162,12 +165,10 @@ public class Board : MonoBehaviour {
     private void DecreaseRow() {
         for (int x = 0; x < width; x++) {
             int nullCount = 0;
-            // Loop from bottom to top
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] == null) {
                     nullCount++;
                 } else if (nullCount > 0) {
-                    // Move the dot down in data
                     allDots[x, y].GetComponent<Dot>().row -= nullCount;
                     allDots[x, y - nullCount] = allDots[x, y];
                     allDots[x, y] = null;
@@ -180,7 +181,6 @@ public class Board : MonoBehaviour {
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] == null) {
-                    // Spawn new dot above the board
                     Vector2 tempPosition = new Vector2(x, y + 2); 
                     int dotToUse = Random.Range(0, dots.Length);
                     
