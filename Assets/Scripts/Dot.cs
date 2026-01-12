@@ -27,13 +27,13 @@ public class Dot : MonoBehaviour {
     }
 
     void Update () {
-        // SMOOTH MOVEMENT
+        // TUNED: Increased speed from .4f to .6f for a snappier slide
         targetX = column;
         targetY = row;
 
         if (Mathf.Abs(targetX - transform.position.x) > .1) {
             Vector2 tempPosition = new Vector2(targetX, transform.position.y);
-            transform.position = Vector2.Lerp(transform.position, tempPosition, .4f);
+            transform.position = Vector2.Lerp(transform.position, tempPosition, .6f);
         } else {
             Vector2 tempPosition = new Vector2(targetX, transform.position.y);
             transform.position = tempPosition;
@@ -41,7 +41,7 @@ public class Dot : MonoBehaviour {
 
         if (Mathf.Abs(targetY - transform.position.y) > .1) {
             Vector2 tempPosition = new Vector2(transform.position.x, targetY);
-            transform.position = Vector2.Lerp(transform.position, tempPosition, .4f);
+            transform.position = Vector2.Lerp(transform.position, tempPosition, .6f);
         } else {
             Vector2 tempPosition = new Vector2(transform.position.x, targetY);
             transform.position = tempPosition;
@@ -54,25 +54,21 @@ public class Dot : MonoBehaviour {
         swipeAngle = angle;
         
         if(swipeAngle > -45 && swipeAngle <= 45 && column < board.width - 1) {
-            // Right Swipe
             otherDot = board.allDots[column + 1, row];
             otherDot.GetComponent<Dot>().column -= 1;
             column += 1;
         }
         else if(swipeAngle > 45 && swipeAngle <= 135 && row < board.height - 1) {
-            // Up Swipe
             otherDot = board.allDots[column, row + 1];
             otherDot.GetComponent<Dot>().row -= 1;
             row += 1;
         }
         else if((swipeAngle > 135 || swipeAngle <= -135) && column > 0) {
-            // Left Swipe
             otherDot = board.allDots[column - 1, row];
             otherDot.GetComponent<Dot>().column += 1;
             column -= 1;
         }
         else if(swipeAngle < -45 && swipeAngle >= -135 && row > 0) {
-            // Down Swipe
             otherDot = board.allDots[column, row - 1];
             otherDot.GetComponent<Dot>().row += 1;
             row -= 1;
@@ -81,12 +77,10 @@ public class Dot : MonoBehaviour {
         StartCoroutine(CheckMoveCo());
     }
 
-    // CHANGED TO PUBLIC for the Board to access
     public void FindMatches() {
-        // Reset match status to ensure we don't hold onto old data
         isMatched = false;
 
-        // HORIZONTAL MATCHES
+        // Horizontal
         if (column > 0 && column < board.width - 1) {
             GameObject leftDot1 = board.allDots[column - 1, row];
             GameObject rightDot1 = board.allDots[column + 1, row];
@@ -121,7 +115,7 @@ public class Dot : MonoBehaviour {
             }
         }
 
-        // VERTICAL MATCHES
+        // Vertical
         if (row > 0 && row < board.height - 1) {
             GameObject upDot1 = board.allDots[column, row + 1];
             GameObject downDot1 = board.allDots[column, row - 1];
@@ -158,7 +152,8 @@ public class Dot : MonoBehaviour {
     }
 
     public IEnumerator CheckMoveCo() {
-        yield return new WaitForSeconds(.5f);
+        // TUNED: Reduced wait time to 0.3s
+        yield return new WaitForSeconds(.3f);
         
         board.allDots[column, row] = this.gameObject;
         board.allDots[otherDot.GetComponent<Dot>().column, otherDot.GetComponent<Dot>().row] = otherDot;
@@ -171,7 +166,10 @@ public class Dot : MonoBehaviour {
             otherDot.GetComponent<Dot>().column = column;
             row = previousRow;
             column = previousColumn;
-            yield return new WaitForSeconds(.5f);
+            
+            // TUNED: Reduced wait time to 0.3s
+            yield return new WaitForSeconds(.3f);
+            
             board.allDots[column, row] = this.gameObject;
             board.allDots[otherDot.GetComponent<Dot>().column, otherDot.GetComponent<Dot>().row] = otherDot;
             board.currentState = GameState.move;

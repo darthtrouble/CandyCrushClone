@@ -18,14 +18,18 @@ public class Board : MonoBehaviour {
     public GameObject tilePrefab;
     public GameObject[] dots;
     
+    [Header("VFX & Audio")]
+    public GameObject explosionFX; 
+    public AudioClip popSound;     
+    private AudioSource audioSource;
+
     [Header("Score")]
     public ScoreManager scoreManager;
-    public int scorePerDot = 20; // Points per animal destroyed
+    public int scorePerDot = 20;
 
     public GameObject[,] allDots;
     public GameState currentState = GameState.move;
     
-    // Input Variables
     private GameControls gameControls; 
     private Vector2 firstTouchPosition;
     private Vector2 finalTouchPosition;
@@ -35,6 +39,15 @@ public class Board : MonoBehaviour {
     private void Awake() {
         gameControls = new GameControls();
         allDots = new GameObject[width, height];
+        
+        if (scoreManager == null) {
+            scoreManager = FindFirstObjectByType<ScoreManager>();
+        }
+        
+        audioSource = GetComponent<AudioSource>();
+        if(audioSource == null) {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
     }
     
     private void OnEnable() { gameControls.Enable(); }
@@ -112,16 +125,17 @@ public class Board : MonoBehaviour {
     }
     
     private IEnumerator DestroyMatchesCo() {
-        yield return new WaitForSeconds(.4f);
+        // TUNED: Reduced wait time to 0.25s
+        yield return new WaitForSeconds(.25f);
         
         bool matchesExist = true;
         while (matchesExist) {
             DestroyMatchesAt();
-            yield return new WaitForSeconds(.4f);
+            yield return new WaitForSeconds(.25f);
 
             DecreaseRow();
             RefillBoard();
-            yield return new WaitForSeconds(.4f);
+            yield return new WaitForSeconds(.25f);
 
             matchesExist = false;
             for (int i = 0; i < width; i++) {
@@ -147,14 +161,19 @@ public class Board : MonoBehaviour {
                 }
             }
         }
+        
+        if(popSound != null) {
+            audioSource.PlayOneShot(popSound);
+        }
     }
 
     private void DestroyMatchesAt(int column, int row) {
         if (allDots[column, row].GetComponent<Dot>().isMatched) {
             
-            // SCORE UPDATE (NEW)
-            if(scoreManager != null) {
-                scoreManager.IncreaseScore(scorePerDot);
+            if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+            
+            if(explosionFX != null) {
+                Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
             }
             
             Destroy(allDots[column, row]);
