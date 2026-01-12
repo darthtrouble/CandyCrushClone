@@ -1,11 +1,14 @@
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine.InputSystem;
+using TMPro; // Needed for UI
+using UnityEngine.SceneManagement; // Needed for Restarting
 
 public enum GameState {
     wait,
-    move
+    move,
+    win,
+    lose
 }
 
 public class Board : MonoBehaviour {
@@ -23,9 +26,16 @@ public class Board : MonoBehaviour {
     public AudioClip popSound;     
     private AudioSource audioSource;
 
-    [Header("Score")]
+    [Header("Score & Goals")]
     public ScoreManager scoreManager;
     public int scorePerDot = 20;
+    public int levelGoal = 1000;
+    public int movesLeft = 20;
+
+    [Header("UI References")]
+    public TextMeshProUGUI movesText;
+    public GameObject endPanel;
+    public TextMeshProUGUI endText;
 
     public GameObject[,] allDots;
     public GameState currentState = GameState.move;
@@ -40,23 +50,25 @@ public class Board : MonoBehaviour {
         gameControls = new GameControls();
         allDots = new GameObject[width, height];
         
-        if (scoreManager == null) {
-            scoreManager = FindFirstObjectByType<ScoreManager>();
-        }
+        if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
         
         audioSource = GetComponent<AudioSource>();
-        if(audioSource == null) {
-            audioSource = gameObject.AddComponent<AudioSource>();
-        }
+        if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
     }
     
     private void OnEnable() { gameControls.Enable(); }
     private void OnDisable() { gameControls.Disable(); }
 
-    void Start () { Setup(); }
+    void Start () { 
+        // Ensure UI is set up correctly at start
+        if(endPanel != null) endPanel.SetActive(false);
+        UpdateMovesText();
+        Setup(); 
+    }
 
     void Update() {
-        if (currentState == GameState.wait) return;
+        // Stop input if game is over or waiting
+        if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
@@ -121,11 +133,18 @@ public class Board : MonoBehaviour {
     }
 
     public void DestroyMatches() {
+        // A match happened! Deduct a move.
+        movesLeft--;
+        UpdateMovesText();
+        
         StartCoroutine(DestroyMatchesCo());
     }
     
+    private void UpdateMovesText() {
+        if(movesText != null) movesText.text = "Moves: " + movesLeft;
+    }
+
     private IEnumerator DestroyMatchesCo() {
-        // TUNED: Reduced wait time to 0.25s
         yield return new WaitForSeconds(.25f);
         
         bool matchesExist = true;
@@ -150,7 +169,25 @@ public class Board : MonoBehaviour {
                 }
             }
         }
-        currentState = GameState.move;
+        
+        // CHECK WIN/LOSE CONDITION
+        if (scoreManager.score >= levelGoal) {
+            currentState = GameState.win;
+            if(endPanel != null) {
+                endPanel.SetActive(true);
+                endText.text = "YOU WIN!";
+            }
+        } 
+        else if (movesLeft <= 0) {
+            currentState = GameState.lose;
+             if(endPanel != null) {
+                endPanel.SetActive(true);
+                endText.text = "TRY AGAIN";
+            }
+        } 
+        else {
+            currentState = GameState.move;
+        }
     }
 
     private void DestroyMatchesAt() {
@@ -161,20 +198,13 @@ public class Board : MonoBehaviour {
                 }
             }
         }
-        
-        if(popSound != null) {
-            audioSource.PlayOneShot(popSound);
-        }
+        if(popSound != null) audioSource.PlayOneShot(popSound);
     }
 
     private void DestroyMatchesAt(int column, int row) {
         if (allDots[column, row].GetComponent<Dot>().isMatched) {
-            
             if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
-            
-            if(explosionFX != null) {
-                Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
-            }
+            if(explosionFX != null) Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
             
             Destroy(allDots[column, row]);
             allDots[column, row] = null;
@@ -202,15 +232,18 @@ public class Board : MonoBehaviour {
                 if (allDots[x, y] == null) {
                     Vector2 tempPosition = new Vector2(x, y + 2); 
                     int dotToUse = Random.Range(0, dots.Length);
-                    
                     GameObject piece = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
                     piece.transform.parent = this.transform;
                     piece.name = "Animal ( " + x + ", " + y + " )";
                     piece.GetComponent<Dot>().Setup(x, y, this);
-                    
                     allDots[x, y] = piece;
                 }
             }
         }
+    }
+    
+    // PUBLIC FUNCTION TO RESTART GAME
+    public void RestartGame() {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }
