@@ -8,7 +8,8 @@ public enum GameState {
     wait,
     move,
     win,
-    lose
+    lose,
+    pause // Added Pause State
 }
 
 public class Board : MonoBehaviour {
@@ -17,8 +18,6 @@ public class Board : MonoBehaviour {
     public LevelData[] levels; 
     private int currentLevelIndex = 0;
 
-    // FIXED: Changed back to PUBLIC so Dot.cs can read them
-    // [HideInInspector] means they won't show in the editor manually
     [HideInInspector] public int width;
     [HideInInspector] public int height;
     
@@ -42,6 +41,7 @@ public class Board : MonoBehaviour {
     public TextMeshProUGUI movesText;
     public GameObject endPanel;
     public TextMeshProUGUI endText;
+    public GameObject pausePanel; // NEW: Drag your PausePanel here
 
     public GameObject[,] allDots;
     public GameState currentState = GameState.move;
@@ -56,10 +56,7 @@ public class Board : MonoBehaviour {
         gameControls = new GameControls();
         
         currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
-        
-        if (currentLevelIndex >= levels.Length) {
-            currentLevelIndex = 0; 
-        }
+        if (currentLevelIndex >= levels.Length) currentLevelIndex = 0; 
 
         if(levels.Length > 0) {
             LevelData data = levels[currentLevelIndex];
@@ -82,12 +79,14 @@ public class Board : MonoBehaviour {
 
     void Start () { 
         if(endPanel != null) endPanel.SetActive(false);
+        if(pausePanel != null) pausePanel.SetActive(false); // Ensure hidden
         UpdateMovesText();
         Setup(); 
     }
 
     void Update() {
-        if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose) return;
+        // Stop input if paused, waiting, or game over
+        if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.pause) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
@@ -193,12 +192,10 @@ public class Board : MonoBehaviour {
                 endPanel.SetActive(true);
                 endText.text = "YOU WIN!";
             }
-            
             if(currentLevelIndex + 1 > PlayerPrefs.GetInt("UnlockedLevel", 0)) {
                 PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 1);
                 PlayerPrefs.SetInt("CurrentLevel", currentLevelIndex + 1); 
             }
-            
             CheckHighScore();
         } 
         else if (movesLeft <= 0) {
@@ -237,7 +234,6 @@ public class Board : MonoBehaviour {
         if (allDots[column, row].GetComponent<Dot>().isMatched) {
             if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
             if(explosionFX != null) Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
-            
             Destroy(allDots[column, row]);
             allDots[column, row] = null;
         }
@@ -275,6 +271,26 @@ public class Board : MonoBehaviour {
     }
     
     public void RestartGame() {
+        Time.timeScale = 1f; // Ensure time is running before reloading
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+    
+    // ---------------- NAVIGATION FUNCTIONS ----------------
+    
+    public void PauseGame() {
+        currentState = GameState.pause;
+        if(pausePanel != null) pausePanel.SetActive(true);
+        Time.timeScale = 0f; // Freeze Game
+    }
+    
+    public void ResumeGame() {
+        currentState = GameState.move;
+        if(pausePanel != null) pausePanel.SetActive(false);
+        Time.timeScale = 1f; // Unfreeze Game
+    }
+    
+    public void GoToMenu() {
+        Time.timeScale = 1f; // Always unfreeze before leaving scene
+        SceneManager.LoadScene("MainMenu");
     }
 }
