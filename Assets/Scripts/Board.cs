@@ -19,8 +19,6 @@ public class Board : MonoBehaviour {
     public GameObject[] dots;
     
     public GameObject[,] allDots;
-    
-    // STATE MACHINE (Fixes the "Spam" bug)
     public GameState currentState = GameState.move;
     
     // Input Variables
@@ -35,23 +33,14 @@ public class Board : MonoBehaviour {
         allDots = new GameObject[width, height];
     }
     
-    private void OnEnable() {
-        gameControls.Enable();
-    }
-    
-    private void OnDisable() {
-        gameControls.Disable();
-    }
+    private void OnEnable() { gameControls.Enable(); }
+    private void OnDisable() { gameControls.Disable(); }
 
-    void Start () {
-        Setup();
-    }
+    void Start () { Setup(); }
 
     void Update() {
-        // BLOCK INPUT IF WE ARE WAITING
         if (currentState == GameState.wait) return;
 
-        // 1. TOUCH START
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
@@ -63,7 +52,6 @@ public class Board : MonoBehaviour {
             }
         }
         
-        // 2. TOUCH RELEASE
         if (gameControls.Gameplay.Fire.WasReleasedThisFrame() && isSwiping) {
             isSwiping = false;
             if(currentlySelectedDot != null) {
@@ -77,14 +65,10 @@ public class Board : MonoBehaviour {
     void CalculateAngle() {
         if(Mathf.Abs(finalTouchPosition.y - firstTouchPosition.y) > .5f || Mathf.Abs(finalTouchPosition.x - firstTouchPosition.x) > .5f) {
             float swipeAngle = Mathf.Atan2(finalTouchPosition.y - firstTouchPosition.y, finalTouchPosition.x - firstTouchPosition.x) * 180 / Mathf.PI;
-            
-            // SET STATE TO WAIT so player can't swipe again immediately
             currentState = GameState.wait;
-            
             currentlySelectedDot.CalculateMove(swipeAngle);
             currentlySelectedDot = null;
         } else {
-            // If it was just a tap (no swipe), return to move state
             currentState = GameState.move;
         }
     }
@@ -108,7 +92,6 @@ public class Board : MonoBehaviour {
                 dot.transform.parent = this.transform;
                 dot.name = "Animal ( " + x + ", " + y + " )";
                 dot.GetComponent<Dot>().Setup(x, y, this);
-                
                 allDots[x, y] = dot;
             }
         }
@@ -120,10 +103,95 @@ public class Board : MonoBehaviour {
         return false;
     }
 
+    // ---------------- DESTRUCTION & GRAVITY LOOP ----------------
+
     public void DestroyMatches() {
-        Debug.Log("Success! Matches found.");
-        // We will implement actual destruction next time.
-        // For now, reset state so we can play again after a log message
-        currentState = GameState.move; 
+        StartCoroutine(DestroyMatchesCo());
+    }
+    
+    private IEnumerator DestroyMatchesCo() {
+        yield return new WaitForSeconds(.4f);
+        
+        bool matchesExist = true;
+        while (matchesExist) {
+            // 1. Destroy Matches
+            DestroyMatchesAt();
+            yield return new WaitForSeconds(.4f);
+
+            // 2. Gravity (Fall)
+            DecreaseRow();
+            
+            // 3. Refill
+            RefillBoard();
+            yield return new WaitForSeconds(.4f);
+
+            // 4. Check for New Matches (Cascade)
+            matchesExist = false;
+            for (int i = 0; i < width; i++) {
+                for (int j = 0; j < height; j++) {
+                    if (allDots[i, j] != null) {
+                        Dot d = allDots[i, j].GetComponent<Dot>();
+                        d.FindMatches(); 
+                        if (d.isMatched) {
+                            matchesExist = true;
+                        }
+                    }
+                }
+            }
+        }
+        currentState = GameState.move;
+    }
+
+    private void DestroyMatchesAt() {
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (allDots[i, j] != null) {
+                    DestroyMatchesAt(i, j);
+                }
+            }
+        }
+    }
+
+    private void DestroyMatchesAt(int column, int row) {
+        if (allDots[column, row].GetComponent<Dot>().isMatched) {
+            Destroy(allDots[column, row]);
+            allDots[column, row] = null;
+        }
+    }
+
+    private void DecreaseRow() {
+        for (int x = 0; x < width; x++) {
+            int nullCount = 0;
+            // Loop from bottom to top
+            for (int y = 0; y < height; y++) {
+                if (allDots[x, y] == null) {
+                    nullCount++;
+                } else if (nullCount > 0) {
+                    // Move the dot down in data
+                    allDots[x, y].GetComponent<Dot>().row -= nullCount;
+                    allDots[x, y - nullCount] = allDots[x, y];
+                    allDots[x, y] = null;
+                }
+            }
+        }
+    }
+
+    private void RefillBoard() {
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                if (allDots[x, y] == null) {
+                    // Spawn new dot above the board
+                    Vector2 tempPosition = new Vector2(x, y + 2); 
+                    int dotToUse = Random.Range(0, dots.Length);
+                    
+                    GameObject piece = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
+                    piece.transform.parent = this.transform;
+                    piece.name = "Animal ( " + x + ", " + y + " )";
+                    piece.GetComponent<Dot>().Setup(x, y, this);
+                    
+                    allDots[x, y] = piece;
+                }
+            }
+        }
     }
 }

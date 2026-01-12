@@ -27,6 +27,7 @@ public class Dot : MonoBehaviour {
     }
 
     void Update () {
+        // SMOOTH MOVEMENT
         targetX = column;
         targetY = row;
 
@@ -53,21 +54,25 @@ public class Dot : MonoBehaviour {
         swipeAngle = angle;
         
         if(swipeAngle > -45 && swipeAngle <= 45 && column < board.width - 1) {
+            // Right Swipe
             otherDot = board.allDots[column + 1, row];
             otherDot.GetComponent<Dot>().column -= 1;
             column += 1;
         }
         else if(swipeAngle > 45 && swipeAngle <= 135 && row < board.height - 1) {
+            // Up Swipe
             otherDot = board.allDots[column, row + 1];
             otherDot.GetComponent<Dot>().row -= 1;
             row += 1;
         }
         else if((swipeAngle > 135 || swipeAngle <= -135) && column > 0) {
+            // Left Swipe
             otherDot = board.allDots[column - 1, row];
             otherDot.GetComponent<Dot>().column += 1;
             column -= 1;
         }
         else if(swipeAngle < -45 && swipeAngle >= -135 && row > 0) {
+            // Down Swipe
             otherDot = board.allDots[column, row - 1];
             otherDot.GetComponent<Dot>().row += 1;
             row -= 1;
@@ -76,12 +81,12 @@ public class Dot : MonoBehaviour {
         StartCoroutine(CheckMoveCo());
     }
 
-    void FindMatches() {
-        // RESET THE FLAG: Assume no match exists until we prove otherwise
+    // CHANGED TO PUBLIC for the Board to access
+    public void FindMatches() {
+        // Reset match status to ensure we don't hold onto old data
         isMatched = false;
-        
-        // HORIZONTAL MATCHES ---------------------------------------------------------
-        // 1. Check Left & Right (I am Middle)
+
+        // HORIZONTAL MATCHES
         if (column > 0 && column < board.width - 1) {
             GameObject leftDot1 = board.allDots[column - 1, row];
             GameObject rightDot1 = board.allDots[column + 1, row];
@@ -93,7 +98,6 @@ public class Dot : MonoBehaviour {
                 }
             }
         }
-        // 2. Check Right & Right-Right (I am Left Edge)
         if (column < board.width - 2) {
             GameObject rightDot1 = board.allDots[column + 1, row];
             GameObject rightDot2 = board.allDots[column + 2, row];
@@ -105,7 +109,6 @@ public class Dot : MonoBehaviour {
                 }
             }
         }
-        // 3. Check Left & Left-Left (I am Right Edge)
         if (column > 1) {
             GameObject leftDot1 = board.allDots[column - 1, row];
             GameObject leftDot2 = board.allDots[column - 2, row];
@@ -118,8 +121,7 @@ public class Dot : MonoBehaviour {
             }
         }
 
-        // VERTICAL MATCHES ---------------------------------------------------------
-        // 1. Check Up & Down (I am Middle)
+        // VERTICAL MATCHES
         if (row > 0 && row < board.height - 1) {
             GameObject upDot1 = board.allDots[column, row + 1];
             GameObject downDot1 = board.allDots[column, row - 1];
@@ -131,7 +133,6 @@ public class Dot : MonoBehaviour {
                 }
             }
         }
-        // 2. Check Up & Up-Up (I am Bottom Edge)
         if (row < board.height - 2) {
             GameObject upDot1 = board.allDots[column, row + 1];
             GameObject upDot2 = board.allDots[column, row + 2];
@@ -143,7 +144,6 @@ public class Dot : MonoBehaviour {
                 }
             }
         }
-        // 3. Check Down & Down-Down (I am Top Edge)
         if (row > 1) {
             GameObject downDot1 = board.allDots[column, row - 1];
             GameObject downDot2 = board.allDots[column, row - 2];
@@ -174,11 +174,8 @@ public class Dot : MonoBehaviour {
             yield return new WaitForSeconds(.5f);
             board.allDots[column, row] = this.gameObject;
             board.allDots[otherDot.GetComponent<Dot>().column, otherDot.GetComponent<Dot>().row] = otherDot;
-            
-            // RESET STATE: Move was bad, let player try again
             board.currentState = GameState.move;
         } else {
-            // Success! The Board will handle the rest (and reset state later)
             board.DestroyMatches();
         }
     }
