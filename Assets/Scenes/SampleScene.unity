@@ -372,6 +372,11 @@ MonoBehaviour:
   width: 6
   height: 8
   tilePrefab: {fileID: 2090589759406842964, guid: 78619d636d252e34bb59f7483b6c6a30, type: 3}
+  dots:
+  - {fileID: 7326316729181217583, guid: c1463068d1bd54d46869ad8585b87682, type: 3}
+  - {fileID: 7326316729181217583, guid: 5e7b89ef348985244bf39e275eb12f77, type: 3}
+  - {fileID: 7326316729181217583, guid: 0837015d45bdcc643b3ca1e0bfb192ef, type: 3}
+  - {fileID: 7326316729181217583, guid: 7c1dfbda93c0a184f8e7c40fa3a08320, type: 3}
 --- !u!4 &1401473473
 Transform:
   m_ObjectHideFlags: 0
@@ -381,7 +386,7 @@ Transform:
   m_GameObject: {fileID: 1401473471}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.10133, y: 0.29537, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
