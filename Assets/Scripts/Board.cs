@@ -1,16 +1,30 @@
 using UnityEngine;
-using UnityEngine.InputSystem; // REQUIRED for New Input
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.InputSystem;
+
+public enum GameState {
+    wait,
+    move
+}
 
 public class Board : MonoBehaviour {
 
+    [Header("Board Dimensions")]
     public int width = 6;
     public int height = 8;
+    
+    [Header("Prefabs")]
     public GameObject tilePrefab;
     public GameObject[] dots;
+    
     public GameObject[,] allDots;
     
-    // INPUT VARIABLES
-    private GameControls gameControls; // Reference to the C# class we generated
+    // STATE MACHINE (Fixes the "Spam" bug)
+    public GameState currentState = GameState.move;
+    
+    // Input Variables
+    private GameControls gameControls; 
     private Vector2 firstTouchPosition;
     private Vector2 finalTouchPosition;
     private bool isSwiping = false;
@@ -33,25 +47,23 @@ public class Board : MonoBehaviour {
         Setup();
     }
 
-    // LISTENING FOR INPUT IN UPDATE
     void Update() {
-        // Did we just press the button/screen?
+        // BLOCK INPUT IF WE ARE WAITING
+        if (currentState == GameState.wait) return;
+
+        // 1. TOUCH START
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
-            // Read the position
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
             
-            // RAYCAST: Shoot a laser at that position to see what we hit
             RaycastHit2D hit = Physics2D.Raycast(firstTouchPosition, Vector2.zero);
-            
             if(hit.collider != null && hit.collider.GetComponent<Dot>()) {
-                // We hit a dot! Remember it.
                 currentlySelectedDot = hit.collider.GetComponent<Dot>();
                 isSwiping = true;
             }
         }
         
-        // Did we just let go?
+        // 2. TOUCH RELEASE
         if (gameControls.Gameplay.Fire.WasReleasedThisFrame() && isSwiping) {
             isSwiping = false;
             if(currentlySelectedDot != null) {
@@ -66,22 +78,19 @@ public class Board : MonoBehaviour {
         if(Mathf.Abs(finalTouchPosition.y - firstTouchPosition.y) > .5f || Mathf.Abs(finalTouchPosition.x - firstTouchPosition.x) > .5f) {
             float swipeAngle = Mathf.Atan2(finalTouchPosition.y - firstTouchPosition.y, finalTouchPosition.x - firstTouchPosition.x) * 180 / Mathf.PI;
             
-            // Tell the DOT to move
+            // SET STATE TO WAIT so player can't swipe again immediately
+            currentState = GameState.wait;
+            
             currentlySelectedDot.CalculateMove(swipeAngle);
-            currentlySelectedDot = null; // Forget the dot so we don't move it again by accident
+            currentlySelectedDot = null;
+        } else {
+            // If it was just a tap (no swipe), return to move state
+            currentState = GameState.move;
         }
     }
 
     private void Setup() {
-        // (This code remains exactly the same as Phase 3)
-        // ... include your existing Setup() code here ...
-        // One tiny change:
-        // Inside the loop, add: dot.GetComponent<Dot>().Setup(x, y, this);
-        // ...
-        
-        // Copy your existing Setup function here, but make sure to 
-        // initialize the Dot script properly when you spawn it.
-         for (int x = 0; x < width; x++) {
+        for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x, y);
                 GameObject backgroundTile = Instantiate(tilePrefab, tempPosition, Quaternion.identity) as GameObject;
@@ -98,8 +107,6 @@ public class Board : MonoBehaviour {
                 GameObject dot = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
                 dot.transform.parent = this.transform;
                 dot.name = "Animal ( " + x + ", " + y + " )";
-                
-                // INITIALIZE THE DOT
                 dot.GetComponent<Dot>().Setup(x, y, this);
                 
                 allDots[x, y] = dot;
@@ -108,9 +115,15 @@ public class Board : MonoBehaviour {
     }
     
     private bool MatchesAt(int column, int row, GameObject piece) {
-        // (Keep this the same as before)
         if(column > 1 && allDots[column - 1, row].tag == piece.tag && allDots[column - 2, row].tag == piece.tag) return true;
         if(row > 1 && allDots[column, row - 1].tag == piece.tag && allDots[column, row - 2].tag == piece.tag) return true;
         return false;
+    }
+
+    public void DestroyMatches() {
+        Debug.Log("Success! Matches found.");
+        // We will implement actual destruction next time.
+        // For now, reset state so we can play again after a log message
+        currentState = GameState.move; 
     }
 }
