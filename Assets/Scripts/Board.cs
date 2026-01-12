@@ -1,8 +1,8 @@
 using UnityEngine;
 using System.Collections;
 using UnityEngine.InputSystem;
-using TMPro; // Needed for UI
-using UnityEngine.SceneManagement; // Needed for Restarting
+using TMPro; 
+using UnityEngine.SceneManagement; 
 
 public enum GameState {
     wait,
@@ -49,9 +49,7 @@ public class Board : MonoBehaviour {
     private void Awake() {
         gameControls = new GameControls();
         allDots = new GameObject[width, height];
-        
         if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
-        
         audioSource = GetComponent<AudioSource>();
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
     }
@@ -60,20 +58,17 @@ public class Board : MonoBehaviour {
     private void OnDisable() { gameControls.Disable(); }
 
     void Start () { 
-        // Ensure UI is set up correctly at start
         if(endPanel != null) endPanel.SetActive(false);
         UpdateMovesText();
         Setup(); 
     }
 
     void Update() {
-        // Stop input if game is over or waiting
         if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
-            
             RaycastHit2D hit = Physics2D.Raycast(firstTouchPosition, Vector2.zero);
             if(hit.collider != null && hit.collider.GetComponent<Dot>()) {
                 currentlySelectedDot = hit.collider.GetComponent<Dot>();
@@ -133,10 +128,8 @@ public class Board : MonoBehaviour {
     }
 
     public void DestroyMatches() {
-        // A match happened! Deduct a move.
         movesLeft--;
         UpdateMovesText();
-        
         StartCoroutine(DestroyMatchesCo());
     }
     
@@ -151,7 +144,6 @@ public class Board : MonoBehaviour {
         while (matchesExist) {
             DestroyMatchesAt();
             yield return new WaitForSeconds(.25f);
-
             DecreaseRow();
             RefillBoard();
             yield return new WaitForSeconds(.25f);
@@ -170,13 +162,14 @@ public class Board : MonoBehaviour {
             }
         }
         
-        // CHECK WIN/LOSE CONDITION
+        // WIN / LOSE CHECKS
         if (scoreManager.score >= levelGoal) {
             currentState = GameState.win;
             if(endPanel != null) {
                 endPanel.SetActive(true);
                 endText.text = "YOU WIN!";
             }
+            CheckHighScore(); // Check if we beat the record
         } 
         else if (movesLeft <= 0) {
             currentState = GameState.lose;
@@ -184,9 +177,20 @@ public class Board : MonoBehaviour {
                 endPanel.SetActive(true);
                 endText.text = "TRY AGAIN";
             }
+            CheckHighScore(); // Even if we lose, maybe we got a high score?
         } 
         else {
             currentState = GameState.move;
+        }
+    }
+
+    // NEW FUNCTION TO SAVE SCORE
+    void CheckHighScore() {
+        int currentHighScore = PlayerPrefs.GetInt("HighScore", 0);
+        if(scoreManager.score > currentHighScore) {
+            PlayerPrefs.SetInt("HighScore", scoreManager.score);
+            PlayerPrefs.Save();
+            Debug.Log("New High Score Saved: " + scoreManager.score);
         }
     }
 
@@ -242,7 +246,6 @@ public class Board : MonoBehaviour {
         }
     }
     
-    // PUBLIC FUNCTION TO RESTART GAME
     public void RestartGame() {
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
