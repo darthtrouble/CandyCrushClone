@@ -9,7 +9,7 @@ public enum GameState {
     move,
     win,
     lose,
-    pause // Added Pause State
+    pause
 }
 
 public class Board : MonoBehaviour {
@@ -41,7 +41,7 @@ public class Board : MonoBehaviour {
     public TextMeshProUGUI movesText;
     public GameObject endPanel;
     public TextMeshProUGUI endText;
-    public GameObject pausePanel; // NEW: Drag your PausePanel here
+    public GameObject pausePanel;
 
     public GameObject[,] allDots;
     public GameState currentState = GameState.move;
@@ -79,13 +79,12 @@ public class Board : MonoBehaviour {
 
     void Start () { 
         if(endPanel != null) endPanel.SetActive(false);
-        if(pausePanel != null) pausePanel.SetActive(false); // Ensure hidden
+        if(pausePanel != null) pausePanel.SetActive(false);
         UpdateMovesText();
         Setup(); 
     }
 
     void Update() {
-        // Stop input if paused, waiting, or game over
         if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.pause) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
@@ -271,26 +270,24 @@ public class Board : MonoBehaviour {
     }
     
     public void RestartGame() {
-        Time.timeScale = 1f; // Ensure time is running before reloading
+        Time.timeScale = 1f; 
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
-    
-    // ---------------- NAVIGATION FUNCTIONS ----------------
     
     public void PauseGame() {
         currentState = GameState.pause;
         if(pausePanel != null) pausePanel.SetActive(true);
-        Time.timeScale = 0f; // Freeze Game
+        Time.timeScale = 0f; 
     }
     
     public void ResumeGame() {
         currentState = GameState.move;
         if(pausePanel != null) pausePanel.SetActive(false);
-        Time.timeScale = 1f; // Unfreeze Game
+        Time.timeScale = 1f; 
     }
     
     public void GoToMenu() {
-        Time.timeScale = 1f; // Always unfreeze before leaving scene
+        Time.timeScale = 1f; 
         SceneManager.LoadScene("MainMenu");
     }
 }
