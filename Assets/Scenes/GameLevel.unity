@@ -825,6 +825,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bf3cf60c20f29f940821d85cf88ef8dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Board
+  levels:
+  - {fileID: 11400000, guid: a21428891b8f08e47b1bc81c1c68b303, type: 2}
+  - {fileID: 11400000, guid: 1ffebed439acdd842b2ec6f52c18e643, type: 2}
   width: 6
   height: 8
   tilePrefab: {fileID: 2090589759406842964, guid: 78619d636d252e34bb59f7483b6c6a30, type: 3}
@@ -837,8 +840,6 @@ MonoBehaviour:
   popSound: {fileID: 8300000, guid: 125a46a0c0d351949930aa73ccc465a3, type: 3}
   scoreManager: {fileID: 1743180942}
   scorePerDot: 20
-  levelGoal: 1000
-  movesLeft: 20
   movesText: {fileID: 244333420}
   endPanel: {fileID: 43761784}
   endText: {fileID: 1241806797}

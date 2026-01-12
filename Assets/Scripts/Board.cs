@@ -13,9 +13,17 @@ public enum GameState {
 
 public class Board : MonoBehaviour {
 
-    [Header("Board Dimensions")]
-    public int width = 6;
-    public int height = 8;
+    [Header("Level Configuration")]
+    public LevelData[] levels; 
+    private int currentLevelIndex = 0;
+
+    // FIXED: Changed back to PUBLIC so Dot.cs can read them
+    // [HideInInspector] means they won't show in the editor manually
+    [HideInInspector] public int width;
+    [HideInInspector] public int height;
+    
+    private int movesLeft;
+    private int levelGoal;
     
     [Header("Prefabs")]
     public GameObject tilePrefab;
@@ -26,11 +34,9 @@ public class Board : MonoBehaviour {
     public AudioClip popSound;     
     private AudioSource audioSource;
 
-    [Header("Score & Goals")]
+    [Header("Score")]
     public ScoreManager scoreManager;
     public int scorePerDot = 20;
-    public int levelGoal = 1000;
-    public int movesLeft = 20;
 
     [Header("UI References")]
     public TextMeshProUGUI movesText;
@@ -48,6 +54,23 @@ public class Board : MonoBehaviour {
 
     private void Awake() {
         gameControls = new GameControls();
+        
+        currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
+        
+        if (currentLevelIndex >= levels.Length) {
+            currentLevelIndex = 0; 
+        }
+
+        if(levels.Length > 0) {
+            LevelData data = levels[currentLevelIndex];
+            width = data.width;
+            height = data.height;
+            movesLeft = data.moves;
+            levelGoal = data.scoreGoal;
+        } else {
+            width = 6; height = 8; movesLeft = 20; levelGoal = 1000;
+        }
+
         allDots = new GameObject[width, height];
         if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
         audioSource = GetComponent<AudioSource>();
@@ -98,6 +121,8 @@ public class Board : MonoBehaviour {
     }
 
     private void Setup() {
+        Camera.main.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -10f);
+        
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x, y);
@@ -162,14 +187,19 @@ public class Board : MonoBehaviour {
             }
         }
         
-        // WIN / LOSE CHECKS
         if (scoreManager.score >= levelGoal) {
             currentState = GameState.win;
             if(endPanel != null) {
                 endPanel.SetActive(true);
                 endText.text = "YOU WIN!";
             }
-            CheckHighScore(); // Check if we beat the record
+            
+            if(currentLevelIndex + 1 > PlayerPrefs.GetInt("UnlockedLevel", 0)) {
+                PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 1);
+                PlayerPrefs.SetInt("CurrentLevel", currentLevelIndex + 1); 
+            }
+            
+            CheckHighScore();
         } 
         else if (movesLeft <= 0) {
             currentState = GameState.lose;
@@ -177,20 +207,18 @@ public class Board : MonoBehaviour {
                 endPanel.SetActive(true);
                 endText.text = "TRY AGAIN";
             }
-            CheckHighScore(); // Even if we lose, maybe we got a high score?
+            CheckHighScore();
         } 
         else {
             currentState = GameState.move;
         }
     }
 
-    // NEW FUNCTION TO SAVE SCORE
     void CheckHighScore() {
         int currentHighScore = PlayerPrefs.GetInt("HighScore", 0);
         if(scoreManager.score > currentHighScore) {
             PlayerPrefs.SetInt("HighScore", scoreManager.score);
             PlayerPrefs.Save();
-            Debug.Log("New High Score Saved: " + scoreManager.score);
         }
     }
 
