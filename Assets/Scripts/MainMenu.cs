@@ -1,27 +1,36 @@
 using UnityEngine;
 using UnityEngine.SceneManagement; 
-using TMPro; // Needed for Text
 
 public class MainMenu : MonoBehaviour {
 
-    public TextMeshProUGUI highScoreText;
+    [Header("Configuration")]
+    public LevelData[] levels; // Drag your ScriptableObjects here!
+    public GameObject buttonPrefab;
+    public Transform gridParent; // The "LevelGrid" panel
 
     void Start() {
-        // 1. Ask Unity: "Do we have a saved 'HighScore' number?"
-        // If yes, get it. If no, give me 0.
-        int bestScore = PlayerPrefs.GetInt("HighScore", 0);
-        
-        // 2. Update the text
-        if(highScoreText != null) {
-            highScoreText.text = "Best: " + bestScore;
-        }
-    }
+        // How many levels have we unlocked? (Default is 1, which means Index 0)
+        int unlockedLevel = PlayerPrefs.GetInt("UnlockedLevel", 1);
 
-    public void PlayGame() {
-        SceneManager.LoadScene("GameLevel");
+        for (int i = 0; i < levels.Length; i++) {
+            GameObject btnObj = Instantiate(buttonPrefab, gridParent);
+            LevelButton btnScript = btnObj.GetComponent<LevelButton>();
+            
+            // Check if this specific level is unlocked
+            // i + 1 because "UnlockedLevel" stores the COUNT (1, 2, 3), not the index
+            bool isUnlocked = (i + 1) <= unlockedLevel;
+            
+            btnScript.Setup(i, isUnlocked);
+        }
     }
 
     public void QuitGame() {
         Application.Quit();
+    }
+    
+    // Cheat function to reset progress (Attach to a hidden button for testing)
+    public void ResetProgress() {
+        PlayerPrefs.DeleteAll();
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }
