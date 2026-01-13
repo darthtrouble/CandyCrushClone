@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using System.Collections.Generic; // Required for Lists
 using UnityEngine.InputSystem;
 using TMPro; 
 using UnityEngine.SceneManagement; 
@@ -36,12 +37,12 @@ public class Board : MonoBehaviour {
     [Header("VFX & Audio")]
     public GameObject explosionFX; 
     public AudioClip popSound;     
-    // NEW: Control the shake strength here!
     public float shakeMagnitude = 0.05f; 
     public float shakeDuration = 0.15f;
     
     private AudioSource audioSource;
     private CameraShake cameraShake;
+    private HintManager hintManager; 
 
     [Header("Score")]
     public ScoreManager scoreManager;
@@ -86,6 +87,7 @@ public class Board : MonoBehaviour {
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         
         cameraShake = Camera.main.GetComponent<CameraShake>();
+        hintManager = FindFirstObjectByType<HintManager>();
     }
     
     private void OnEnable() { gameControls.Enable(); }
@@ -102,6 +104,8 @@ public class Board : MonoBehaviour {
         if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.pause) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
+            if(hintManager != null) hintManager.ResetTimer(); // Reset hint on click
+
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
             RaycastHit2D hit = Physics2D.Raycast(firstTouchPosition, Vector2.zero);
@@ -137,7 +141,6 @@ public class Board : MonoBehaviour {
         
         if(boardBackground != null) {
             boardBackground.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -5f);
-            
             SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
             if(sr != null && sr.drawMode == SpriteDrawMode.Sliced) {
                 sr.size = new Vector2(width + borderPadding, height + borderPadding);
@@ -260,7 +263,6 @@ public class Board : MonoBehaviour {
             
             if(explosionFX != null) {
                 Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
-                // FIXED: Use the new variables here
                 if(cameraShake != null) StartCoroutine(cameraShake.Shake(shakeDuration, shakeMagnitude));
             }
             
@@ -320,5 +322,62 @@ public class Board : MonoBehaviour {
     public void GoToMenu() {
         Time.timeScale = 1f; 
         SceneManager.LoadScene("MainMenu");
+    }
+
+    // ---------------- HINT SYSTEM LOGIC ----------------
+
+    // NOW RETURNS A PAIR (List) OF DOTS
+    public List<GameObject> CheckForMatches() {
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                if (allDots[x, y] != null) {
+                    // Check Right Swap
+                    if (x < width - 1) {
+                        if (SwitchAndCheck(x, y, Vector2.right)) {
+                            // Return the TWO pieces that need to swap
+                            return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
+                        }
+                    }
+                    // Check Up Swap
+                    if (y < height - 1) {
+                        if (SwitchAndCheck(x, y, Vector2.up)) {
+                            // Return the TWO pieces that need to swap
+                            return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private bool SwitchAndCheck(int column, int row, Vector2 direction) {
+        SwitchPieces(column, row, direction);
+        bool hasMatch = false;
+        if (CheckConnection(column, row) || CheckConnection(column + (int)direction.x, row + (int)direction.y)) {
+            hasMatch = true;
+        }
+        SwitchPieces(column, row, direction);
+        return hasMatch;
+    }
+
+    private void SwitchPieces(int column, int row, Vector2 direction) {
+        GameObject holder = allDots[column + (int)direction.x, row + (int)direction.y];
+        allDots[column + (int)direction.x, row + (int)direction.y] = allDots[column, row];
+        allDots[column, row] = holder;
+    }
+
+    private bool CheckConnection(int column, int row) {
+        if (allDots[column, row] == null) return false;
+        
+        if (column > 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column - 2, row].tag == allDots[column, row].tag) return true;
+        if (column < width - 2 && allDots[column + 1, row].tag == allDots[column, row].tag && allDots[column + 2, row].tag == allDots[column, row].tag) return true;
+        if (column > 0 && column < width - 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column + 1, row].tag == allDots[column, row].tag) return true;
+
+        if (row > 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row - 2].tag == allDots[column, row].tag) return true;
+        if (row < height - 2 && allDots[column, row + 1].tag == allDots[column, row].tag && allDots[column, row + 2].tag == allDots[column, row].tag) return true;
+        if (row > 0 && row < height - 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row + 1].tag == allDots[column, row].tag) return true;
+
+        return false;
     }
 }
