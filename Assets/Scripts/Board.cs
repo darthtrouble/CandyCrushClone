@@ -24,6 +24,11 @@ public class Board : MonoBehaviour {
     private int movesLeft;
     private int levelGoal;
     
+    [Header("Board Styling")]
+    public GameObject boardBackground; 
+    public float borderPadding = 1f;
+    public Vector3 cameraOffset; 
+    
     [Header("Prefabs")]
     public GameObject tilePrefab;
     public GameObject[] dots;
@@ -31,7 +36,12 @@ public class Board : MonoBehaviour {
     [Header("VFX & Audio")]
     public GameObject explosionFX; 
     public AudioClip popSound;     
+    // NEW: Control the shake strength here!
+    public float shakeMagnitude = 0.05f; 
+    public float shakeDuration = 0.15f;
+    
     private AudioSource audioSource;
+    private CameraShake cameraShake;
 
     [Header("Score")]
     public ScoreManager scoreManager;
@@ -69,9 +79,13 @@ public class Board : MonoBehaviour {
         }
 
         allDots = new GameObject[width, height];
+        
         if (scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
+        
         audioSource = GetComponent<AudioSource>();
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        
+        cameraShake = Camera.main.GetComponent<CameraShake>();
     }
     
     private void OnEnable() { gameControls.Enable(); }
@@ -119,8 +133,19 @@ public class Board : MonoBehaviour {
     }
 
     private void Setup() {
-        Camera.main.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -10f);
+        Camera.main.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -10f) + cameraOffset;
         
+        if(boardBackground != null) {
+            boardBackground.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -5f);
+            
+            SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
+            if(sr != null && sr.drawMode == SpriteDrawMode.Sliced) {
+                sr.size = new Vector2(width + borderPadding, height + borderPadding);
+            } else {
+                boardBackground.transform.localScale = new Vector3(width + borderPadding, height + borderPadding, 1);
+            }
+        }
+
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x, y);
@@ -232,7 +257,13 @@ public class Board : MonoBehaviour {
     private void DestroyMatchesAt(int column, int row) {
         if (allDots[column, row].GetComponent<Dot>().isMatched) {
             if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
-            if(explosionFX != null) Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
+            
+            if(explosionFX != null) {
+                Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
+                // FIXED: Use the new variables here
+                if(cameraShake != null) StartCoroutine(cameraShake.Shake(shakeDuration, shakeMagnitude));
+            }
+            
             Destroy(allDots[column, row]);
             allDots[column, row] = null;
         }

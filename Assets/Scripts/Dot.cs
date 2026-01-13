@@ -27,21 +27,25 @@ public class Dot : MonoBehaviour {
     }
 
     void Update () {
-        // TUNED: Increased speed from .4f to .6f for a snappier slide
+        // POLISHED MOVEMENT: Exponential Ease Out
+        float speed = 15f; 
+        
         targetX = column;
         targetY = row;
 
-        if (Mathf.Abs(targetX - transform.position.x) > .1) {
+        // Move X
+        if (Mathf.Abs(targetX - transform.position.x) > .05f) { 
             Vector2 tempPosition = new Vector2(targetX, transform.position.y);
-            transform.position = Vector2.Lerp(transform.position, tempPosition, .6f);
+            transform.position = Vector2.Lerp(transform.position, tempPosition, speed * Time.deltaTime);
         } else {
             Vector2 tempPosition = new Vector2(targetX, transform.position.y);
             transform.position = tempPosition;
         }
 
-        if (Mathf.Abs(targetY - transform.position.y) > .1) {
+        // Move Y
+        if (Mathf.Abs(targetY - transform.position.y) > .05f) {
             Vector2 tempPosition = new Vector2(transform.position.x, targetY);
-            transform.position = Vector2.Lerp(transform.position, tempPosition, .6f);
+            transform.position = Vector2.Lerp(transform.position, tempPosition, speed * Time.deltaTime);
         } else {
             Vector2 tempPosition = new Vector2(transform.position.x, targetY);
             transform.position = tempPosition;
@@ -152,7 +156,6 @@ public class Dot : MonoBehaviour {
     }
 
     public IEnumerator CheckMoveCo() {
-        // TUNED: Reduced wait time to 0.3s
         yield return new WaitForSeconds(.3f);
         
         board.allDots[column, row] = this.gameObject;
@@ -167,7 +170,6 @@ public class Dot : MonoBehaviour {
             row = previousRow;
             column = previousColumn;
             
-            // TUNED: Reduced wait time to 0.3s
             yield return new WaitForSeconds(.3f);
             
             board.allDots[column, row] = this.gameObject;
