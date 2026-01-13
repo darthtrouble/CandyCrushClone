@@ -1,13 +1,14 @@
 using UnityEngine;
 using TMPro;
-using UnityEngine.UI;
+using UnityEngine.UI; // Required for Button
 using UnityEngine.SceneManagement;
 
 public class LevelButton : MonoBehaviour {
 
+    [Header("UI References")]
     public TextMeshProUGUI levelText;
     public Button myButton;
-    public GameObject lockIcon; // Optional: drag a lock image here if you have one
+    public GameObject lockedOverlay; // Drag your 'LockedOverlay' (The X) here!
 
     private int levelIndex;
 
@@ -16,18 +17,23 @@ public class LevelButton : MonoBehaviour {
         levelText.text = (level + 1).ToString(); // Display "1" for Level 0
 
         if (isUnlocked) {
-            myButton.interactable = true;
-            if(lockIcon != null) lockIcon.SetActive(false);
+            // UNLOCKED STATE
+            myButton.interactable = true;       // Make it clickable
+            lockedOverlay.SetActive(false);     // Hide the X
             
-            // On Click, save which level we want and load the game
+            // Clear old listeners to prevent double-clicks if recycled
+            myButton.onClick.RemoveAllListeners();
+            
+            // Add click logic
             myButton.onClick.AddListener(() => {
                 PlayerPrefs.SetInt("CurrentLevel", levelIndex);
                 SceneManager.LoadScene("GameLevel");
             });
-        } else {
-            myButton.interactable = false; // Greyed out
-            myButton.image.color = Color.grey; 
-            if(lockIcon != null) lockIcon.SetActive(true);
+        } 
+        else {
+            // LOCKED STATE
+            myButton.interactable = false;      // Make it unclickable
+            lockedOverlay.SetActive(true);      // Show the X
         }
     }
 }

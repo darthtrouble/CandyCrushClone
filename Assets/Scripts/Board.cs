@@ -67,9 +67,11 @@ public class Board : MonoBehaviour {
         gameControls = new GameControls();
         
         currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
-        if (currentLevelIndex >= levels.Length) currentLevelIndex = 0; 
+        
+        // Safety check to prevent crashing if level index is invalid
+        if (levels != null && currentLevelIndex >= levels.Length) currentLevelIndex = 0; 
 
-        if(levels.Length > 0) {
+        if(levels != null && levels.Length > 0) {
             LevelData data = levels[currentLevelIndex];
             width = data.width;
             height = data.height;
@@ -104,7 +106,7 @@ public class Board : MonoBehaviour {
         if (currentState == GameState.wait || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.pause) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
-            if(hintManager != null) hintManager.ResetTimer(); // Reset hint on click
+            if(hintManager != null) hintManager.ResetTimer(); 
 
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
@@ -137,8 +139,10 @@ public class Board : MonoBehaviour {
     }
 
     private void Setup() {
+        // Setup Camera Position
         Camera.main.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -10f) + cameraOffset;
         
+        // Setup Background resizing
         if(boardBackground != null) {
             boardBackground.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -5f);
             SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
@@ -149,6 +153,7 @@ public class Board : MonoBehaviour {
             }
         }
 
+        // Generate Grid
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x, y);
@@ -219,10 +224,16 @@ public class Board : MonoBehaviour {
                 endPanel.SetActive(true);
                 endText.text = "YOU WIN!";
             }
-            if(currentLevelIndex + 1 > PlayerPrefs.GetInt("UnlockedLevel", 0)) {
-                PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 1);
-                PlayerPrefs.SetInt("CurrentLevel", currentLevelIndex + 1); 
+            
+            // --- FIX FOR UNLOCKING LEVELS ---
+            int unlockedLevels = PlayerPrefs.GetInt("UnlockedLevel", 1);
+            // If we are at the edge of our progress (Current + 1 == Total Unlocked), open the next one
+            if (currentLevelIndex + 1 >= unlockedLevels) {
+                PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 2);
+                PlayerPrefs.Save();
             }
+            // --------------------------------
+            
             CheckHighScore();
         } 
         else if (movesLeft <= 0) {
@@ -326,7 +337,6 @@ public class Board : MonoBehaviour {
 
     // ---------------- HINT SYSTEM LOGIC ----------------
 
-    // NOW RETURNS A PAIR (List) OF DOTS
     public List<GameObject> CheckForMatches() {
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
@@ -334,14 +344,14 @@ public class Board : MonoBehaviour {
                     // Check Right Swap
                     if (x < width - 1) {
                         if (SwitchAndCheck(x, y, Vector2.right)) {
-                            // Return the TWO pieces that need to swap
+                            // Return BOTH dots involved
                             return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
                         }
                     }
                     // Check Up Swap
                     if (y < height - 1) {
                         if (SwitchAndCheck(x, y, Vector2.up)) {
-                            // Return the TWO pieces that need to swap
+                            // Return BOTH dots involved
                             return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
                         }
                     }
