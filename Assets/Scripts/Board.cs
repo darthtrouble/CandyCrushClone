@@ -1,6 +1,6 @@
 using UnityEngine;
 using System.Collections;
-using System.Collections.Generic; // Required for Lists
+using System.Collections.Generic;
 using UnityEngine.InputSystem;
 using TMPro; 
 using UnityEngine.SceneManagement; 
@@ -27,7 +27,11 @@ public class Board : MonoBehaviour {
     
     [Header("Board Styling")]
     public GameObject boardBackground; 
-    public float borderPadding = 1f;
+    public float borderPadding = 1f; 
+    
+    [Tooltip("Add extra space for UI on top/bottom (try 3 or 4)")]
+    public float extraVerticalPadding = 3f; 
+
     public Vector3 cameraOffset; 
     
     [Header("Prefabs")]
@@ -67,8 +71,6 @@ public class Board : MonoBehaviour {
         gameControls = new GameControls();
         
         currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
-        
-        // Safety check to prevent crashing if level index is invalid
         if (levels != null && currentLevelIndex >= levels.Length) currentLevelIndex = 0; 
 
         if(levels != null && levels.Length > 0) {
@@ -139,27 +141,45 @@ public class Board : MonoBehaviour {
     }
 
     private void Setup() {
-        // Setup Camera Position
+        // --- CAMERA LOGIC (Handles Screen Fitting) ---
         Camera.main.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -10f) + cameraOffset;
-        
-        // Setup Background resizing
+
+        // Calculate needed zoom based on board size + padding
+        float verticalSize = (height / 2f) + borderPadding + extraVerticalPadding;
+        float horizontalSize = ((width / 2f) + borderPadding) / Camera.main.aspect;
+
+        // Apply the larger zoom to ensure fit
+        Camera.main.orthographicSize = Mathf.Max(verticalSize, horizontalSize);
+        // ---------------------------------------------
+
+        // --- BACKGROUND LOGIC (Handles The Frame) ---
+        // This puts the Rounded Square BEHIND the tiles, sized perfectly to the grid.
         if(boardBackground != null) {
-            boardBackground.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, -5f);
-            SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
-            if(sr != null && sr.drawMode == SpriteDrawMode.Sliced) {
-                sr.size = new Vector2(width + borderPadding, height + borderPadding);
+            boardBackground.transform.position = new Vector3((width - 1) / 2f, (height - 1) / 2f, 5f);
+            
+            SpriteRenderer bgSr = boardBackground.GetComponent<SpriteRenderer>();
+            
+            // FIX: We size it to width/height, NOT screen size
+            if(bgSr != null && bgSr.drawMode == SpriteDrawMode.Sliced) {
+                bgSr.size = new Vector2(width + borderPadding, height + borderPadding);
             } else {
                 boardBackground.transform.localScale = new Vector3(width + borderPadding, height + borderPadding, 1);
             }
+            
+            // Ensure it is on the Background layer
+            if(bgSr) bgSr.sortingLayerName = "Background";
         }
 
-        // Generate Grid
+        // --- TILE GENERATION ---
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x, y);
                 GameObject backgroundTile = Instantiate(tilePrefab, tempPosition, Quaternion.identity) as GameObject;
                 backgroundTile.transform.parent = this.transform;
                 backgroundTile.name = "( " + x + ", " + y + " )";
+                
+                // Put tiles on Board layer
+                backgroundTile.GetComponent<SpriteRenderer>().sortingLayerName = "Board";
                 
                 int dotToUse = Random.Range(0, dots.Length);
                 int maxIterations = 0;
@@ -173,9 +193,14 @@ public class Board : MonoBehaviour {
                 dot.name = "Animal ( " + x + ", " + y + " )";
                 dot.GetComponent<Dot>().Setup(x, y, this);
                 allDots[x, y] = dot;
+                
+                // Put animals on Units layer
+                dot.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
             }
         }
     }
+    
+    // ... [Rest of the script matches previous correct versions] ...
     
     private bool MatchesAt(int column, int row, GameObject piece) {
         if(column > 1 && allDots[column - 1, row].tag == piece.tag && allDots[column - 2, row].tag == piece.tag) return true;
@@ -224,16 +249,11 @@ public class Board : MonoBehaviour {
                 endPanel.SetActive(true);
                 endText.text = "YOU WIN!";
             }
-            
-            // --- FIX FOR UNLOCKING LEVELS ---
             int unlockedLevels = PlayerPrefs.GetInt("UnlockedLevel", 1);
-            // If we are at the edge of our progress (Current + 1 == Total Unlocked), open the next one
             if (currentLevelIndex + 1 >= unlockedLevels) {
                 PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 2);
                 PlayerPrefs.Save();
             }
-            // --------------------------------
-            
             CheckHighScore();
         } 
         else if (movesLeft <= 0) {
@@ -276,7 +296,6 @@ public class Board : MonoBehaviour {
                 Instantiate(explosionFX, allDots[column, row].transform.position, Quaternion.identity);
                 if(cameraShake != null) StartCoroutine(cameraShake.Shake(shakeDuration, shakeMagnitude));
             }
-            
             Destroy(allDots[column, row]);
             allDots[column, row] = null;
         }
@@ -308,6 +327,8 @@ public class Board : MonoBehaviour {
                     piece.name = "Animal ( " + x + ", " + y + " )";
                     piece.GetComponent<Dot>().Setup(x, y, this);
                     allDots[x, y] = piece;
+                    // Ensure new dots are on Units layer
+                    piece.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
                 }
             }
         }
@@ -317,43 +338,30 @@ public class Board : MonoBehaviour {
         Time.timeScale = 1f; 
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
-    
     public void PauseGame() {
         currentState = GameState.pause;
         if(pausePanel != null) pausePanel.SetActive(true);
         Time.timeScale = 0f; 
     }
-    
     public void ResumeGame() {
         currentState = GameState.move;
         if(pausePanel != null) pausePanel.SetActive(false);
         Time.timeScale = 1f; 
     }
-    
     public void GoToMenu() {
         Time.timeScale = 1f; 
         SceneManager.LoadScene("MainMenu");
     }
 
-    // ---------------- HINT SYSTEM LOGIC ----------------
-
     public List<GameObject> CheckForMatches() {
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] != null) {
-                    // Check Right Swap
                     if (x < width - 1) {
-                        if (SwitchAndCheck(x, y, Vector2.right)) {
-                            // Return BOTH dots involved
-                            return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
-                        }
+                        if (SwitchAndCheck(x, y, Vector2.right)) return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
                     }
-                    // Check Up Swap
                     if (y < height - 1) {
-                        if (SwitchAndCheck(x, y, Vector2.up)) {
-                            // Return BOTH dots involved
-                            return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
-                        }
+                        if (SwitchAndCheck(x, y, Vector2.up)) return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
                     }
                 }
             }
@@ -364,9 +372,7 @@ public class Board : MonoBehaviour {
     private bool SwitchAndCheck(int column, int row, Vector2 direction) {
         SwitchPieces(column, row, direction);
         bool hasMatch = false;
-        if (CheckConnection(column, row) || CheckConnection(column + (int)direction.x, row + (int)direction.y)) {
-            hasMatch = true;
-        }
+        if (CheckConnection(column, row) || CheckConnection(column + (int)direction.x, row + (int)direction.y)) hasMatch = true;
         SwitchPieces(column, row, direction);
         return hasMatch;
     }
@@ -379,15 +385,12 @@ public class Board : MonoBehaviour {
 
     private bool CheckConnection(int column, int row) {
         if (allDots[column, row] == null) return false;
-        
         if (column > 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column - 2, row].tag == allDots[column, row].tag) return true;
         if (column < width - 2 && allDots[column + 1, row].tag == allDots[column, row].tag && allDots[column + 2, row].tag == allDots[column, row].tag) return true;
         if (column > 0 && column < width - 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column + 1, row].tag == allDots[column, row].tag) return true;
-
         if (row > 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row - 2].tag == allDots[column, row].tag) return true;
         if (row < height - 2 && allDots[column, row + 1].tag == allDots[column, row].tag && allDots[column, row + 2].tag == allDots[column, row].tag) return true;
         if (row > 0 && row < height - 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row + 1].tag == allDots[column, row].tag) return true;
-
         return false;
     }
 }
