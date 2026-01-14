@@ -3,30 +3,45 @@ using System.Collections;
 
 public class CameraShake : MonoBehaviour {
 
-    // Shake function taking Duration (how long) and Magnitude (how strong)
+    private Vector3 trueOriginPosition;
+    private bool isShaking = false;
+    private Coroutine currentShakeRoutine;
+
     public IEnumerator Shake(float duration, float magnitude) {
         
-        Vector3 originalPos = new Vector3(0, 0, -10f); // Default camera position
-        // If your camera moves (e.g. following player), capture transform.localPosition instead.
-        // For this puzzle game, the camera is static, so hardcoding or capturing start pos works.
-        // Let's capture current pos to be safe:
-        originalPos = transform.localPosition;
+        // 1. If we are NOT already shaking, save the current spot as the "True Home".
+        //    If we ARE already shaking, we trust the 'trueOriginPosition' we saved earlier.
+        if (!isShaking) {
+            trueOriginPosition = transform.localPosition;
+            isShaking = true;
+        }
 
+        // 2. If a shake is already running, stop it so we can restart with the new timer
+        if (currentShakeRoutine != null) {
+            StopCoroutine(currentShakeRoutine);
+        }
+
+        // 3. Start the actual movement loop
+        currentShakeRoutine = StartCoroutine(DoShake(duration, magnitude));
+        yield return currentShakeRoutine;
+    }
+
+    private IEnumerator DoShake(float duration, float magnitude) {
         float elapsed = 0.0f;
 
         while (elapsed < duration) {
-            // Generate random offset
+            // Shake relative to the TRUE ORIGIN, not the current position
             float x = Random.Range(-1f, 1f) * magnitude;
             float y = Random.Range(-1f, 1f) * magnitude;
 
-            // Apply offset
-            transform.localPosition = new Vector3(originalPos.x + x, originalPos.y + y, originalPos.z);
+            transform.localPosition = new Vector3(trueOriginPosition.x + x, trueOriginPosition.y + y, trueOriginPosition.z);
 
             elapsed += Time.deltaTime;
-            yield return null; // Wait for next frame
+            yield return null;
         }
 
-        // Reset to original position
-        transform.localPosition = originalPos;
+        // 4. Reset to the True Home and clear the flag
+        transform.localPosition = trueOriginPosition;
+        isShaking = false;
     }
 }
