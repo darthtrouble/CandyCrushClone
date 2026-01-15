@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 1998033855538060953}
   m_Layer: 0
   m_Name: Zebra
-  m_TagString: Blue
+  m_TagString: Zebra
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -107,8 +107,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Dot
   column: 0
   row: 0
-  targetX: 0
-  targetY: 0
   isMatched: 0
 --- !u!58 &1998033855538060953
 CircleCollider2D:

@@ -4,10 +4,10 @@
 TagManager:
   serializedVersion: 3
   tags:
-  - Red
-  - Blue
-  - Green
-  - Yellow
+  - Bird
+  - Fish
+  - Horse
+  - Zebra
   layers:
   - Default
   - TransparentFX

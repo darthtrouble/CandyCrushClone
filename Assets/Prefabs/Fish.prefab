@@ -14,7 +14,7 @@ GameObject:
   - component: {fileID: 5120417348526118453}
   m_Layer: 0
   m_Name: Fish
-  m_TagString: Green
+  m_TagString: Fish
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -107,8 +107,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Dot
   column: 0
   row: 0
-  targetX: 0
-  targetY: 0
   isMatched: 0
 --- !u!58 &5120417348526118453
 CircleCollider2D:
