@@ -16,3 +16,4 @@ MonoBehaviour:
   height: 8
   moves: 20
   scoreGoal: 1500
+  tileLayout: 

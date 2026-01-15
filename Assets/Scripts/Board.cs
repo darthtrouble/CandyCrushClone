@@ -5,7 +5,13 @@ using UnityEngine.InputSystem;
 using TMPro; 
 using UnityEngine.SceneManagement; 
 
-public enum GameState { wait, move, win, lose, pause }
+public enum GameState {
+    wait,
+    move,
+    win,
+    lose,
+    pause
+}
 
 public class Board : MonoBehaviour {
 
@@ -22,8 +28,12 @@ public class Board : MonoBehaviour {
     [Header("Board Styling")]
     public GameObject boardBackground; 
     public float borderPadding = 1f; 
+    [Tooltip("Extra space for UI on iPads (Try 3 or 4)")]
     public float extraVerticalPadding = 3f; 
     
+    // PUBLIC so Dots can read it and stay centered
+    public Vector2 centerOffset; 
+
     [Header("Prefabs")]
     public GameObject tilePrefab;
     public GameObject[] dots;
@@ -31,12 +41,24 @@ public class Board : MonoBehaviour {
     
     [Header("UI & Audio")]
     public TextMeshProUGUI movesText;
-    public GameObject endPanel;
-    public TextMeshProUGUI endText;
-    public GameObject pausePanel;
+    public GameObject pausePanel; 
     public ScoreManager scoreManager;
+    public EndGameManager endManager; 
     public AudioClip popSound;     
     public int scorePerDot = 20;
+
+    [Header("Combo Animation")]
+    [Tooltip("Starting speed for the first pop (0.4s)")]
+    public float basePopDelay = 0.4f; 
+    [Tooltip("How much faster it gets per combo (0.7 = 30% faster)")]
+    public float popAcceleration = 0.7f; 
+    [Tooltip("The fastest it can possibly go")]
+    public float minPopDelay = 0.05f;
+
+    // References
+    private AudioSource audioSource;
+    private CameraShake cameraShake;
+    private HintManager hintManager; 
 
     // State
     public GameObject[,] allDots;
@@ -48,21 +70,12 @@ public class Board : MonoBehaviour {
     private Vector2 finalTouchPosition;
     private bool isSwiping = false;
     private Dot currentlySelectedDot;
-    
-    // References
-    private AudioSource audioSource;
-    private CameraShake cameraShake;
-    private HintManager hintManager; 
-
-    // --- CHANGE: MADE PUBLIC SO DOTS CAN READ IT ---
-    public Vector2 centerOffset; 
 
     private void Awake() {
         gameControls = new GameControls();
         currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
-        if (levels != null && currentLevelIndex >= levels.Length) currentLevelIndex = 0; 
 
-        if(levels != null && levels.Length > 0) {
+        if(levels != null && currentLevelIndex < levels.Length) {
             LevelData data = levels[currentLevelIndex];
             width = data.width;
             height = data.height;
@@ -73,9 +86,12 @@ public class Board : MonoBehaviour {
         }
 
         allDots = new GameObject[width, height];
-        scoreManager = FindFirstObjectByType<ScoreManager>();
+        
+        if(scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
+        
         audioSource = GetComponent<AudioSource>();
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        
         cameraShake = Camera.main.GetComponent<CameraShake>();
         hintManager = FindFirstObjectByType<HintManager>();
     }
@@ -84,20 +100,20 @@ public class Board : MonoBehaviour {
     private void OnDisable() { gameControls.Disable(); }
 
     void Start () { 
-        if(endPanel != null) endPanel.SetActive(false);
         if(pausePanel != null) pausePanel.SetActive(false);
         UpdateMovesText();
         Setup(); 
     }
 
     void Update() {
-        if (currentState != GameState.move) return;
+        if (currentState == GameState.pause || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.wait) return;
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             if(hintManager != null) hintManager.ResetTimer(); 
-
+            
             Vector2 mousePos = gameControls.Gameplay.Point.ReadValue<Vector2>();
             firstTouchPosition = Camera.main.ScreenToWorldPoint(mousePos);
+            
             RaycastHit2D hit = Physics2D.Raycast(firstTouchPosition, Vector2.zero);
             if(hit.collider != null && hit.collider.GetComponent<Dot>()) {
                 currentlySelectedDot = hit.collider.GetComponent<Dot>();
@@ -118,6 +134,7 @@ public class Board : MonoBehaviour {
     void CalculateAngle() {
         if(Mathf.Abs(finalTouchPosition.y - firstTouchPosition.y) > .5f || Mathf.Abs(finalTouchPosition.x - firstTouchPosition.x) > .5f) {
             float swipeAngle = Mathf.Atan2(finalTouchPosition.y - firstTouchPosition.y, finalTouchPosition.x - firstTouchPosition.x) * 180 / Mathf.PI;
+            
             currentState = GameState.wait;
             currentlySelectedDot.CalculateMove(swipeAngle);
             currentlySelectedDot = null;
@@ -125,18 +142,13 @@ public class Board : MonoBehaviour {
     }
 
     private void Setup() {
-        // 1. Calculate the Offset to center the board at (0,0)
         centerOffset = new Vector2((width - 1) / 2f, (height - 1) / 2f);
-
-        // 2. Lock Camera to (0,0)
         Camera.main.transform.position = new Vector3(0, 0, -10f);
 
-        // 3. Zoom Calculation
         float verticalSize = (height / 2f) + borderPadding + extraVerticalPadding;
         float horizontalSize = ((width / 2f) + borderPadding) / Camera.main.aspect;
         Camera.main.orthographicSize = Mathf.Max(verticalSize, horizontalSize);
 
-        // 4. Board Background
         if(boardBackground != null) {
             boardBackground.transform.position = new Vector3(0, 0, 5f); 
             SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
@@ -148,13 +160,13 @@ public class Board : MonoBehaviour {
             if(sr) sr.sortingLayerName = "Board"; 
         }
 
-        // 5. Generate Tiles
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x - centerOffset.x, y - centerOffset.y);
+                
                 GameObject backgroundTile = Instantiate(tilePrefab, tempPosition, Quaternion.identity) as GameObject;
                 backgroundTile.transform.parent = this.transform;
-                backgroundTile.name = "( " + x + ", " + y + " )";
+                backgroundTile.name = $"( {x}, {y} )";
                 backgroundTile.GetComponent<SpriteRenderer>().sortingLayerName = "Board";
 
                 int dotToUse = Random.Range(0, dots.Length);
@@ -166,7 +178,7 @@ public class Board : MonoBehaviour {
 
                 GameObject dot = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
                 dot.transform.parent = this.transform;
-                dot.name = "Animal ( " + x + ", " + y + " )";
+                dot.name = $"Animal ( {x}, {y} )";
                 dot.GetComponent<Dot>().Setup(x, y, this);
                 allDots[x, y] = dot;
                 dot.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
@@ -180,22 +192,163 @@ public class Board : MonoBehaviour {
         return false;
     }
 
+    public void DestroyMatches() {
+        movesLeft--;
+        UpdateMovesText();
+        StartCoroutine(DestroyMatchesCo());
+    }
+    
+    private void UpdateMovesText() { if(movesText != null) movesText.text = "Moves: " + movesLeft; }
+
+    // --- ACCELERATION LOGIC IS HERE ---
+    private IEnumerator DestroyMatchesCo() {
+        
+        // 1. Reset Speed to Neutral (0.4s) at the start of the turn
+        float currentDelay = basePopDelay;
+
+        yield return new WaitForSeconds(0.1f);
+        
+        bool matchesExist = true;
+        while (matchesExist) {
+            
+            // 2. Destroy and wait using the CURRENT delay
+            DestroyMatchesAt();
+            yield return new WaitForSeconds(currentDelay);
+            
+            DecreaseRow();
+            RefillBoard();
+            
+            // 3. Wait again (allow fall) using CURRENT delay
+            yield return new WaitForSeconds(currentDelay);
+
+            // 4. ACCELERATE: Make the next delay shorter!
+            // Multiply by 0.7 (30% faster) but don't go below 0.05s
+            currentDelay = Mathf.Max(minPopDelay, currentDelay * popAcceleration);
+
+            matchesExist = false;
+            for (int i = 0; i < width; i++) {
+                for (int j = 0; j < height; j++) {
+                    if (allDots[i, j] != null) {
+                        Dot d = allDots[i, j].GetComponent<Dot>();
+                        d.FindMatches(); 
+                        if (d.isMatched) matchesExist = true;
+                    }
+                }
+            }
+        }
+        
+        if (scoreManager.score >= levelGoal) {
+            currentState = GameState.win;
+            if(endManager != null) endManager.ShowWin(scoreManager.score, levelGoal);
+            
+            int unlockedLevels = PlayerPrefs.GetInt("UnlockedLevel", 1);
+            if (currentLevelIndex + 1 >= unlockedLevels) {
+                PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 2);
+                PlayerPrefs.Save();
+            }
+        } 
+        else if (movesLeft <= 0) {
+            currentState = GameState.lose;
+            if(endManager != null) endManager.ShowLose(scoreManager.score);
+        } 
+        else {
+            currentState = GameState.move;
+        }
+    }
+
+    private void DestroyMatchesAt() {
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (allDots[i, j] != null && allDots[i, j].GetComponent<Dot>().isMatched) {
+                    if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+                    if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
+                    if(cameraShake != null) StartCoroutine(cameraShake.Shake(0.15f, 0.05f));
+                    
+                    Destroy(allDots[i, j]);
+                    allDots[i, j] = null;
+                }
+            }
+        }
+        if(popSound != null) audioSource.PlayOneShot(popSound);
+    }
+    
+    private void DecreaseRow() {
+        for (int x = 0; x < width; x++) {
+            int nullCount = 0;
+            for (int y = 0; y < height; y++) {
+                if (allDots[x, y] == null) nullCount++;
+                else if (nullCount > 0) {
+                    allDots[x, y].GetComponent<Dot>().row -= nullCount;
+                    allDots[x, y - nullCount] = allDots[x, y];
+                    allDots[x, y] = null;
+                }
+            }
+        }
+    }
+    
+    private void RefillBoard() {
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                if (allDots[x, y] == null) {
+                    Vector2 tempPosition = new Vector2(x - centerOffset.x, y + 2 - centerOffset.y); 
+                    int dotToUse = Random.Range(0, dots.Length);
+                    GameObject piece = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
+                    piece.transform.parent = this.transform;
+                    piece.name = $"Animal ( {x}, {y} )";
+                    piece.GetComponent<Dot>().Setup(x, y, this);
+                    allDots[x, y] = piece;
+                    piece.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
+                }
+            }
+        }
+    }
+
+    public void PauseGame() {
+        if(currentState == GameState.move) {
+            currentState = GameState.pause;
+            if(pausePanel != null) pausePanel.SetActive(true);
+            Time.timeScale = 0f; 
+        }
+    }
+
+    public void ResumeGame() {
+        if(currentState == GameState.pause) {
+            currentState = GameState.move;
+            if(pausePanel != null) pausePanel.SetActive(false);
+            Time.timeScale = 1f; 
+        }
+    }
+
+    public void RestartGame() { 
+        Time.timeScale = 1f; 
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name); 
+    }
+
+    public void GoToMenu() { 
+        Time.timeScale = 1f; 
+        SceneManager.LoadScene("MainMenu"); 
+    }
+
+    public void LoadNextLevel() {
+        Time.timeScale = 1f;
+        int nextIndex = currentLevelIndex + 1;
+        if (levels != null && nextIndex >= levels.Length) nextIndex = 0; 
+        
+        PlayerPrefs.SetInt("CurrentLevel", nextIndex);
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+    
     public List<GameObject> CheckForMatches() {
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] != null) {
-                    if (x < width - 1) {
-                        if (SwitchAndCheck(x, y, Vector2.right)) return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
-                    }
-                    if (y < height - 1) {
-                        if (SwitchAndCheck(x, y, Vector2.up)) return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
-                    }
+                    if (x < width - 1) if (SwitchAndCheck(x, y, Vector2.right)) return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
+                    if (y < height - 1) if (SwitchAndCheck(x, y, Vector2.up)) return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
                 }
             }
         }
         return null;
     }
-
     private bool SwitchAndCheck(int column, int row, Vector2 direction) {
         SwitchPieces(column, row, direction);
         bool hasMatch = false;
@@ -218,82 +371,4 @@ public class Board : MonoBehaviour {
         if (row > 0 && row < height - 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row + 1].tag == allDots[column, row].tag) return true;
         return false;
     }
-    public void DestroyMatches() { movesLeft--; UpdateMovesText(); StartCoroutine(DestroyMatchesCo()); }
-    private void UpdateMovesText() { if(movesText != null) movesText.text = "Moves: " + movesLeft; }
-    private IEnumerator DestroyMatchesCo() {
-        yield return new WaitForSeconds(.25f);
-        bool matchesExist = true;
-        while (matchesExist) {
-            DestroyMatchesAt();
-            yield return new WaitForSeconds(.25f);
-            DecreaseRow();
-            RefillBoard();
-            yield return new WaitForSeconds(.25f);
-            matchesExist = false;
-            for (int i = 0; i < width; i++) {
-                for (int j = 0; j < height; j++) {
-                    if (allDots[i, j] != null) {
-                        Dot d = allDots[i, j].GetComponent<Dot>();
-                        d.FindMatches(); 
-                        if (d.isMatched) matchesExist = true;
-                    }
-                }
-            }
-        }
-        if (scoreManager.score >= levelGoal) {
-            currentState = GameState.win;
-            if(endPanel != null) { endPanel.SetActive(true); endText.text = "YOU WIN!"; }
-            int unlockedLevels = PlayerPrefs.GetInt("UnlockedLevel", 1);
-            if (currentLevelIndex + 1 >= unlockedLevels) { PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 2); PlayerPrefs.Save(); }
-        } else if (movesLeft <= 0) {
-            currentState = GameState.lose;
-            if(endPanel != null) { endPanel.SetActive(true); endText.text = "TRY AGAIN"; }
-        } else currentState = GameState.move;
-    }
-    private void DestroyMatchesAt() {
-        for (int i = 0; i < width; i++) {
-            for (int j = 0; j < height; j++) {
-                if (allDots[i, j] != null && allDots[i, j].GetComponent<Dot>().isMatched) {
-                    if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
-                    if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
-                    Destroy(allDots[i, j]);
-                    allDots[i, j] = null;
-                }
-            }
-        }
-        if(popSound != null) audioSource.PlayOneShot(popSound);
-    }
-    private void DecreaseRow() {
-        for (int x = 0; x < width; x++) {
-            int nullCount = 0;
-            for (int y = 0; y < height; y++) {
-                if (allDots[x, y] == null) nullCount++;
-                else if (nullCount > 0) {
-                    allDots[x, y].GetComponent<Dot>().row -= nullCount;
-                    allDots[x, y - nullCount] = allDots[x, y];
-                    allDots[x, y] = null;
-                }
-            }
-        }
-    }
-    private void RefillBoard() {
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                if (allDots[x, y] == null) {
-                    Vector2 tempPosition = new Vector2(x - centerOffset.x, y + 2 - centerOffset.y); 
-                    int dotToUse = Random.Range(0, dots.Length);
-                    GameObject piece = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
-                    piece.transform.parent = this.transform;
-                    piece.name = "Animal ( " + x + ", " + y + " )";
-                    piece.GetComponent<Dot>().Setup(x, y, this);
-                    allDots[x, y] = piece;
-                    piece.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
-                }
-            }
-        }
-    }
-    public void RestartGame() { Time.timeScale = 1f; SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
-    public void PauseGame() { currentState = GameState.pause; if(pausePanel != null) pausePanel.SetActive(true); Time.timeScale = 0f; }
-    public void ResumeGame() { currentState = GameState.move; if(pausePanel != null) pausePanel.SetActive(false); Time.timeScale = 1f; }
-    public void GoToMenu() { Time.timeScale = 1f; SceneManager.LoadScene("MainMenu"); }
 }
