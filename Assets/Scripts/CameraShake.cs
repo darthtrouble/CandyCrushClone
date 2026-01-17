@@ -9,6 +9,10 @@ public class CameraShake : MonoBehaviour {
 
     public IEnumerator Shake(float duration, float magnitude) {
         
+        if (PlayerPrefs.GetInt("ShakeEnabled", 1) == 0) {
+            yield break;
+        }
+
         // 1. If we are NOT already shaking, save the current spot as the "True Home".
         //    If we ARE already shaking, we trust the 'trueOriginPosition' we saved earlier.
         if (!isShaking) {
