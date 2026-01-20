@@ -1,57 +1,61 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
-using UnityEngine.Audio; // REQUIRED for Mixers
+using UnityEngine.Audio;
 
 public class SettingsManager : MonoBehaviour {
 
     [Header("Audio Reference")]
-    public AudioMixer mainMixer; // Drag MainMixer here
+    public AudioMixer mainMixer; 
 
     [Header("UI Elements")]
     public Slider musicSlider;
     public Slider sfxSlider;
     public Toggle shakeToggle;
 
-    void Start() {
-        // 1. Load Music (Default 0.5)
+    // CHANGED: Use OnEnable so it updates every time the panel opens
+    void OnEnable() {
+        // 1. Load & Update Music Slider
         float savedMusic = PlayerPrefs.GetFloat("MusicVolume", 0.5f);
-        if(musicSlider != null) musicSlider.value = savedMusic;
-        SetMusicVolume(savedMusic); // Apply immediately
+        if(musicSlider != null) {
+            musicSlider.value = savedMusic;
+            // Force the event to run so the Mixer updates immediately
+            SetMusicVolume(savedMusic); 
+        }
 
-        // 2. Load SFX (Default 0.5)
+        // 2. Load & Update SFX Slider
         float savedSFX = PlayerPrefs.GetFloat("SFXVolume", 0.5f);
-        if(sfxSlider != null) sfxSlider.value = savedSFX;
-        SetSFXVolume(savedSFX); // Apply immediately
+        if(sfxSlider != null) {
+            sfxSlider.value = savedSFX;
+            SetSFXVolume(savedSFX);
+        }
 
-        // 3. Load Shake
+        // 3. Load Shake Toggle
         int shakeInt = PlayerPrefs.GetInt("ShakeEnabled", 1);
         if(shakeToggle != null) shakeToggle.isOn = (shakeInt == 1);
     }
 
     public void SetMusicVolume(float value) {
-        // Convert 0-1 slider to Logarithmic Decibels (-80 to 0)
+        if(mainMixer == null) return;
         float dB = (value <= 0.001f) ? -80f : Mathf.Log10(value) * 20;
-        
         mainMixer.SetFloat("MusicVol", dB);
         PlayerPrefs.SetFloat("MusicVolume", value);
-        PlayerPrefs.Save();
     }
 
     public void SetSFXVolume(float value) {
+        if(mainMixer == null) return;
         float dB = (value <= 0.001f) ? -80f : Mathf.Log10(value) * 20;
-
         mainMixer.SetFloat("SFXVol", dB);
         PlayerPrefs.SetFloat("SFXVolume", value);
-        PlayerPrefs.Save();
     }
 
     public void SetShake(bool isOn) {
         PlayerPrefs.SetInt("ShakeEnabled", isOn ? 1 : 0);
         PlayerPrefs.Save();
     }
-
-    public void BackToMenu() {
-        SceneManager.LoadScene("MainMenu");
+    
+    // Save on close, just to be safe
+    public void SaveSettings() {
+        PlayerPrefs.Save();
     }
 }
