@@ -909,7 +909,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 455896635}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1912,7 +1912,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 825734442}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -3135,6 +3135,7 @@ MonoBehaviour:
   boardBackground: {fileID: 1980131274}
   borderPadding: 0
   extraVerticalPadding: 2
+  offSet: 10
   centerOffset: {x: 0, y: 0}
   tilePrefab: {fileID: 2090589759406842964, guid: 78619d636d252e34bb59f7483b6c6a30, type: 3}
   dots:
@@ -3142,6 +3143,7 @@ MonoBehaviour:
   - {fileID: 7326316729181217583, guid: 5e7b89ef348985244bf39e275eb12f77, type: 3}
   - {fileID: 7326316729181217583, guid: 0837015d45bdcc643b3ca1e0bfb192ef, type: 3}
   - {fileID: 7326316729181217583, guid: 7c1dfbda93c0a184f8e7c40fa3a08320, type: 3}
+  - {fileID: 7326316729181217583, guid: 1de03326aa0f5f744bfe6ca4b82fc33f, type: 3}
   explosionFX: {fileID: 4066603081960568364, guid: 4c6e78f79a056ca439afbda8a72d2c15, type: 3}
   movesText: {fileID: 244333420}
   pausePanel: {fileID: 938886035}
@@ -3149,9 +3151,9 @@ MonoBehaviour:
   endManager: {fileID: 1901055291}
   popSound: {fileID: 8300000, guid: 125a46a0c0d351949930aa73ccc465a3, type: 3}
   scorePerDot: 20
-  basePopDelay: 0.2
-  popAcceleration: 0.7
-  minPopDelay: 0.05
+  basePopDelay: 0.3
+  popAcceleration: 0.3
+  minPopDelay: 0.2
   currentState: 1
 --- !u!4 &1401473473
 Transform:
@@ -3594,16 +3596,16 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1573037723}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2030644202}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 0.5}
-  m_AnchorMax: {x: 1, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 400}
-  m_SizeDelta: {x: 0, y: 429.9888}
+  m_AnchorMin: {x: 0.5, y: 0.5}
+  m_AnchorMax: {x: 0.5, y: 0.5}
+  m_AnchoredPosition: {x: 4.3099976, y: 546.99}
+  m_SizeDelta: {x: 1080, y: 429.9888}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &1573037725
 CanvasRenderer:
@@ -3947,7 +3949,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1674486481}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -4709,9 +4711,9 @@ MonoBehaviour:
   messageText: {fileID: 1573037726}
   scoreText: {fileID: 1674486484}
   starImages:
-  - {fileID: 0}
-  - {fileID: 0}
-  - {fileID: 0}
+  - {fileID: 1796662324}
+  - {fileID: 1844790285}
+  - {fileID: 1746561090}
   goldStarSprite: {fileID: 4815476061570213978, guid: 9216fc42bf3fbb340b73ecb36c9a1ac4, type: 3}
   grayStarSprite: {fileID: -7700239110961326441, guid: 754ba57dfc562e4428a2d8e4d1cacea0, type: 3}
   nextLevelButton: {fileID: 825734442}
@@ -5223,7 +5225,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2111314859}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -5290,7 +5292,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2139064600}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -0.0000076293945}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

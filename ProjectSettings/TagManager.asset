@@ -4,10 +4,11 @@
 TagManager:
   serializedVersion: 3
   tags:
+  - Bear
   - Bird
-  - Fish
-  - Horse
-  - Zebra
+  - Chick
+  - Parrot
+  - Penguin
   layers:
   - Default
   - TransparentFX
