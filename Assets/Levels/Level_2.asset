@@ -16,4 +16,7 @@ MonoBehaviour:
   height: 8
   moves: 20
   scoreGoal: 1500
-  tileLayout: 
+  iceTiles:
+  - {x: 2, y: 3}
+  - {x: 3, y: 3}
+  - {x: 4, y: 3}

@@ -62,6 +62,7 @@ public class Board : MonoBehaviour {
 
     // State
     public GameObject[,] allDots;
+    public GameObject[,] allTiles; // NEW: Track background tiles for Ice
     public GameState currentState = GameState.move;
     
     // Input
@@ -86,6 +87,7 @@ public class Board : MonoBehaviour {
         }
 
         allDots = new GameObject[width, height];
+        allTiles = new GameObject[width, height]; // Initialize Tile Array
         
         if(scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
         
@@ -164,10 +166,26 @@ public class Board : MonoBehaviour {
             for (int y = 0; y < height; y++) {
                 Vector2 tempPosition = new Vector2(x - centerOffset.x, y - centerOffset.y);
                 
+                // --- NEW ICE LOGIC ---
                 GameObject backgroundTile = Instantiate(tilePrefab, tempPosition, Quaternion.identity) as GameObject;
                 backgroundTile.transform.parent = this.transform;
                 backgroundTile.name = $"( {x}, {y} )";
                 backgroundTile.GetComponent<SpriteRenderer>().sortingLayerName = "Board";
+                
+                // Add the script dynamically (so you don't have to edit the prefab)
+                BackgroundTile bgScript = backgroundTile.GetComponent<BackgroundTile>();
+                if (bgScript == null) bgScript = backgroundTile.AddComponent<BackgroundTile>();
+
+                int hp = 0;
+                // Check level data for ice
+                if(levels != null && currentLevelIndex < levels.Length && levels[currentLevelIndex].iceTiles != null) {
+                    if (levels[currentLevelIndex].iceTiles.Contains(new Vector2(x, y))) {
+                        hp = 1; 
+                    }
+                }
+                bgScript.Setup(hp);
+                allTiles[x, y] = backgroundTile;
+                // ---------------------
 
                 int dotToUse = Random.Range(0, dots.Length);
                 int maxIterations = 0;
@@ -200,10 +218,7 @@ public class Board : MonoBehaviour {
     
     private void UpdateMovesText() { if(movesText != null) movesText.text = "Moves: " + movesLeft; }
 
-    // --- ACCELERATION LOGIC IS HERE ---
     private IEnumerator DestroyMatchesCo() {
-        
-        // 1. Reset Speed to Neutral (0.4s) at the start of the turn
         float currentDelay = basePopDelay;
 
         yield return new WaitForSeconds(0.1f);
@@ -211,18 +226,15 @@ public class Board : MonoBehaviour {
         bool matchesExist = true;
         while (matchesExist) {
             
-            // 2. Destroy and wait using the CURRENT delay
             DestroyMatchesAt();
             yield return new WaitForSeconds(currentDelay);
             
             DecreaseRow();
             RefillBoard();
             
-            // 3. Wait again (allow fall) using CURRENT delay
             yield return new WaitForSeconds(currentDelay);
 
-            // 4. ACCELERATE: Make the next delay shorter!
-            // Multiply by 0.7 (30% faster) but don't go below 0.05s
+            // ACCELERATE
             currentDelay = Mathf.Max(minPopDelay, currentDelay * popAcceleration);
 
             matchesExist = false;
@@ -260,6 +272,16 @@ public class Board : MonoBehaviour {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null && allDots[i, j].GetComponent<Dot>().isMatched) {
+                    
+                    // --- BREAK ICE ---
+                    if (allTiles[i, j] != null) {
+                        BackgroundTile bg = allTiles[i, j].GetComponent<BackgroundTile>();
+                        if (bg != null && bg.hitPoints > 0) {
+                            bg.TakeDamage(1);
+                        }
+                    }
+                    // -----------------
+
                     if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
                     if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                     if(cameraShake != null) StartCoroutine(cameraShake.Shake(0.15f, 0.05f));
