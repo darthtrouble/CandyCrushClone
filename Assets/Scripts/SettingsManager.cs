@@ -53,6 +53,11 @@ public class SettingsManager : MonoBehaviour {
         PlayerPrefs.SetInt("ShakeEnabled", isOn ? 1 : 0);
         PlayerPrefs.Save();
     }
+
+    public void GoToMainMenu() {
+        Time.timeScale = 1f; // Ensure time isn't frozen if we came from a pause
+        SceneManager.LoadScene("MainMenu"); // Make sure your scene is named exactly "MainMenu"
+    }
     
     // Save on close, just to be safe
     public void SaveSettings() {
