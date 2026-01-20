@@ -9,6 +9,7 @@ TagManager:
   - Chick
   - Parrot
   - Penguin
+  - ColorBomb
   layers:
   - Default
   - TransparentFX

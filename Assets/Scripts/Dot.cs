@@ -77,40 +77,48 @@ public class Dot : MonoBehaviour {
     }
 
     public IEnumerator CheckMoveCo() {
+        if (otherDot == null) yield break;
+
         Dot otherScript = otherDot.GetComponent<Dot>();
         
-        // --- 1. DOUBLE COLOR BOMB (Destroy Everything) ---
+        // --- 1. DOUBLE COLOR BOMB (Nuke Board) ---
         if (isColorBomb && otherScript.isColorBomb) {
             isMatched = true;
             otherScript.isMatched = true;
             board.NukeBoard();
-            board.DestroyMatches(); // Tell board to actually clean up and refill!
-            yield break; // Stop here, no need to check anything else
+            board.DestroyMatches(); // Critical: Triggers the cleanup!
+            yield break;
         }
 
-        // --- 2. COLOR BOMB + STRIPE/AREA COMBO ---
-        // Case A: I am Color, Other is Stripe/Area
+        // --- 2. COLOR BOMB + SPECIAL (Combo) ---
         else if (isColorBomb && (otherScript.isRowBomb || otherScript.isColumnBomb || otherScript.isAreaBomb)) {
             StartCoroutine(ColorBombComboRoutine(otherScript));
             yield break; 
         }
-        // Case B: Other is Color, I am Stripe/Area
         else if (otherScript.isColorBomb && (isRowBomb || isColumnBomb || isAreaBomb)) {
             otherScript.StartCoroutine(otherScript.ColorBombComboRoutine(this));
             yield break;
         }
 
-        // --- 3. COLOR BOMB + NORMAL TILE ---
-        else if (isColorBomb && otherDot != null) {
+        // --- 3. COLOR BOMB + NORMAL TILE (Standard Clear) ---
+        else if (isColorBomb) {
             board.DestroyColor(otherDot.tag);
-            isMatched = true;
+            isMatched = true; 
+            
+            // --- THE FIX ---
+            board.DestroyMatches(); // Tell the board to destroy the red/blue/green dots!
+            // ---------------
         }
-        else if (otherDot != null && otherScript.isColorBomb) {
+        else if (otherScript.isColorBomb) {
             board.DestroyColor(this.tag);
             otherScript.isMatched = true;
+            
+            // --- THE FIX ---
+            board.DestroyMatches(); // Tell the board to destroy them!
+            // ---------------
         }
         
-        // --- 4. STANDARD MOVES (Swap back if no match) ---
+        // --- 4. STANDARD MOVES ---
         else {
             yield return new WaitForSeconds(.2f);
             
@@ -118,7 +126,7 @@ public class Dot : MonoBehaviour {
             if(otherDot != null) otherScript.FindMatches();
 
             if (!isMatched && !otherScript.isMatched) {
-                // Invalid Move -> Swap Back
+                // Swap Back
                 int tempCol = column; int tempRow = row;
                 column = otherScript.column; row = otherScript.row;
                 otherScript.column = tempCol; otherScript.row = tempRow;
@@ -298,7 +306,7 @@ public class Dot : MonoBehaviour {
         
         if (isColorBomb) {
             // FIX: Change Tag so it doesn't match with normal animals anymore
-            gameObject.tag = "Untagged"; // Or create a custom tag "ColorBomb"
+            gameObject.tag = "ColorBomb"; // Or create a custom tag "ColorBomb"
             
             if(colorBombSprite != null) colorBombSprite.SetActive(true);
         }
