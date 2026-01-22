@@ -45,6 +45,7 @@ public class Board : MonoBehaviour {
     public EndGameManager endManager; 
     public AudioClip popSound;     
     public int scorePerDot = 20;
+    public GameObject floatingScorePrefab; // <--- Drag your prefab here in Inspector!
 
     [Header("Combo Animation")]
     public float basePopDelay = 0.4f; 
@@ -312,6 +313,14 @@ public class Board : MonoBehaviour {
 
                         // Score & FX
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+
+                        if (floatingScorePrefab != null) {
+                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[i, j].transform.position, Quaternion.identity);
+                            if(floatText.GetComponent<FloatingText>() != null) {
+                                floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
+                            }
+                        }
+
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         
                         Destroy(allDots[i, j]);
@@ -337,6 +346,13 @@ public class Board : MonoBehaviour {
                         // Destroy visuals manually
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+
+                        // --- NEW: FLOATING TEXT ---
+                        if (floatingScorePrefab != null) {
+                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[i, j].transform.position, Quaternion.identity);
+                            floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
+                        }
+                        // --------------------------
                         
                         Destroy(allDots[i, j]);
                         allDots[i, j] = null;

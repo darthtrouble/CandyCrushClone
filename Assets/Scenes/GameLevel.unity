@@ -3151,6 +3151,7 @@ MonoBehaviour:
   endManager: {fileID: 1901055291}
   popSound: {fileID: 8300000, guid: 125a46a0c0d351949930aa73ccc465a3, type: 3}
   scorePerDot: 20
+  floatingScorePrefab: {fileID: 2390218420171463510, guid: 938d37882ff6c0d498644de5e38a63f7, type: 3}
   basePopDelay: 0.3
   popAcceleration: 0.3
   minPopDelay: 0.2
@@ -4091,6 +4092,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::ScoreManager
   scoreText: {fileID: 1766962612}
   score: 0
+  comboTextPrefab: {fileID: 0}
+  comboMultiplier: 1
 --- !u!4 &1743180943
 Transform:
   m_ObjectHideFlags: 0
