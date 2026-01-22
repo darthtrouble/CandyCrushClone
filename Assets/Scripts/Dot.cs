@@ -81,47 +81,102 @@ public class Dot : MonoBehaviour {
 
         Dot otherScript = otherDot.GetComponent<Dot>();
         
-        // --- 1. DOUBLE COLOR BOMB (Nuke Board) ---
+        // --- 1. DOUBLE COLOR BOMB (Nuke) ---
         if (isColorBomb && otherScript.isColorBomb) {
-            isMatched = true;
-            otherScript.isMatched = true;
+            isMatched = true; otherScript.isMatched = true;
+            
+            // FIX: Untag them so they don't match anything else while exploding
+            gameObject.tag = "Untagged";
+            otherScript.gameObject.tag = "Untagged";
+            
             board.NukeBoard();
-            board.DestroyMatches(); // Critical: Triggers the cleanup!
+            board.DestroyMatches();
             yield break;
         }
 
-        // --- 2. COLOR BOMB + SPECIAL (Combo) ---
+        // --- 2. COLOR BOMB + ANY BOMB (Transform) ---
         else if (isColorBomb && (otherScript.isRowBomb || otherScript.isColumnBomb || otherScript.isAreaBomb)) {
+            // FIX: Untag the Color Bomb immediately
+            gameObject.tag = "Untagged";
             StartCoroutine(ColorBombComboRoutine(otherScript));
             yield break; 
         }
         else if (otherScript.isColorBomb && (isRowBomb || isColumnBomb || isAreaBomb)) {
+            // FIX: Untag the Color Bomb immediately
+            otherScript.gameObject.tag = "Untagged";
             otherScript.StartCoroutine(otherScript.ColorBombComboRoutine(this));
             yield break;
         }
 
-        // --- 3. COLOR BOMB + NORMAL TILE (Standard Clear) ---
+        // --- 3. STRIPE + AREA (Mega Stripe) ---
+        else if ((isRowBomb || isColumnBomb) && otherScript.isAreaBomb) {
+            isMatched = true; otherScript.isMatched = true;
+            
+            // FIX: Untag both immediately so they execute ONLY this combo
+            gameObject.tag = "Untagged";
+            otherScript.gameObject.tag = "Untagged";
+            
+            if (isRowBomb) board.DestroyRowStrip(row);
+            else board.DestroyColumnStrip(column);
+            
+            board.DestroyMatches();
+            yield break;
+        }
+        else if (isAreaBomb && (otherScript.isRowBomb || otherScript.isColumnBomb)) {
+            isMatched = true; otherScript.isMatched = true;
+            
+            // FIX: Untag both
+            gameObject.tag = "Untagged";
+            otherScript.gameObject.tag = "Untagged";
+
+            if (otherScript.isRowBomb) board.DestroyRowStrip(otherScript.row);
+            else board.DestroyColumnStrip(otherScript.column);
+            
+            board.DestroyMatches();
+            yield break;
+        }
+
+        // --- 4. STRIPE + STRIPE (Cross Blast) ---
+        else if ((isRowBomb || isColumnBomb) && (otherScript.isRowBomb || otherScript.isColumnBomb)) {
+            isMatched = true; otherScript.isMatched = true;
+            
+            // FIX: Untag both
+            gameObject.tag = "Untagged";
+            otherScript.gameObject.tag = "Untagged";
+            
+            board.DestroyMatches();
+            yield break; 
+        }
+
+        // --- 5. AREA + AREA (Double Pop Sequence) ---
+        else if (isAreaBomb && otherScript.isAreaBomb) {
+            otherScript.isMatched = true; 
+            
+            // FIX: Untag both. Crucial here because one stays alive for 0.5s!
+            gameObject.tag = "Untagged";
+            otherScript.gameObject.tag = "Untagged";
+            
+            StartCoroutine(board.DoubleAreaBombRoutine(otherScript.column, otherScript.row, this));
+            yield break;
+        }
+
+        // --- 6. COLOR BOMB + NORMAL ---
         else if (isColorBomb) {
+            gameObject.tag = "Untagged"; // Untag bomb
             board.DestroyColor(otherDot.tag);
             isMatched = true; 
-            
-            // --- THE FIX ---
-            board.DestroyMatches(); // Tell the board to destroy the red/blue/green dots!
-            // ---------------
+            board.DestroyMatches();
         }
         else if (otherScript.isColorBomb) {
+            otherScript.gameObject.tag = "Untagged"; // Untag bomb
             board.DestroyColor(this.tag);
             otherScript.isMatched = true;
-            
-            // --- THE FIX ---
-            board.DestroyMatches(); // Tell the board to destroy them!
-            // ---------------
+            board.DestroyMatches();
         }
         
-        // --- 4. STANDARD MOVES ---
+        // --- 7. STANDARD MOVES ---
         else {
             yield return new WaitForSeconds(.2f);
-            
             FindMatches();
             if(otherDot != null) otherScript.FindMatches();
 
@@ -140,13 +195,13 @@ public class Dot : MonoBehaviour {
         }
     }
 
-    // --- NEW: THE TRANSFORMATION SEQUENCE ---
     public IEnumerator ColorBombComboRoutine(Dot bombBeingReplicated) {
-        // 1. Get the color we want to transform
+        // 1. Get the color we want to transform BEFORE untagging
         string targetTag = bombBeingReplicated.tag; 
-
-        // Check if we are replicating an Area Bomb (Packet) or a Line Bomb (Stripe)
         bool isSourceArea = bombBeingReplicated.isAreaBomb;
+
+        // FIX: Now that we have the data, UNTAG the source bomb so it doesn't match neighbors
+        bombBeingReplicated.gameObject.tag = "Untagged";
 
         // Destroy the Color Bomb itself immediately
         isMatched = true; 
@@ -157,39 +212,26 @@ public class Dot : MonoBehaviour {
                 if (board.allDots[i, j] != null) {
                     Dot d = board.allDots[i, j].GetComponent<Dot>();
                     
-                    // If it matches the color of the bomb we swiped...
                     if (d.tag == targetTag) {
-                        
-                        // Reset existing flags just in case
                         d.isRowBomb = false;
                         d.isColumnBomb = false;
                         d.isAreaBomb = false;
 
                         if (isSourceArea) {
-                            // If we swapped with an Area Bomb, make them all Area Bombs
                             d.isAreaBomb = true;
                         } 
                         else {
-                            // --- THE FIX: RANDOMIZE DIRECTION ---
-                            // If we swapped with a Row OR Column bomb, pick randomly for EACH dot
-                            if (Random.value > 0.5f) {
-                                d.isRowBomb = true;
-                            } else {
-                                d.isColumnBomb = true;
-                            }
+                            if (Random.value > 0.5f) d.isRowBomb = true; 
+                            else d.isColumnBomb = true;
                         }
-                        
-                        // Show the Visuals (Arrows/Circles) immediately
                         d.ActivateBombVisual(); 
                     }
                 }
             }
         }
 
-        // 3. WAIT (Visual Pause)
         yield return new WaitForSeconds(0.3f);
 
-        // 4. POP THEM ALL
         for (int i = 0; i < board.width; i++) {
             for (int j = 0; j < board.height; j++) {
                 if (board.allDots[i, j] != null) {
@@ -197,13 +239,12 @@ public class Dot : MonoBehaviour {
                     
                     if (d.tag == targetTag) {
                         d.isMatched = true;
-                        d.isBomb = true; // Ensure Board knows to trigger the explosion logic
+                        d.isBomb = true; 
                     }
                 }
             }
         }
         
-        // Trigger the explosions
         board.DestroyMatches();
     }
 

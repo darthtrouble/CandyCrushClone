@@ -249,6 +249,12 @@ public class Board : MonoBehaviour {
             }
         }
         
+        // 5. DEADLOCK CHECK
+        if (IsDeadlocked()) {
+            Debug.Log("Deadlock detected! Shuffling...");
+            ShuffleBoard();
+        }
+        
         // --- WIN / LOSE CONDITIONS ---
         if (scoreManager.score >= levelGoal) {
             currentState = GameState.win;
@@ -319,7 +325,76 @@ public class Board : MonoBehaviour {
         if(cameraShake != null) StartCoroutine(cameraShake.Shake(0.15f, 0.05f));
     }
 
+    // --- DOUBLE AREA BOMB SEQUENCE (Pop -> Drop -> Wait -> Pop) ---
+    public IEnumerator DoubleAreaBombRoutine(int x, int y, Dot activeBomb) {
+        // PASS 1: Destroy everything in 3x3 EXCEPT the active bomb
+        for (int i = x - 1; i <= x + 1; i++) {
+            for (int j = y - 1; j <= y + 1; j++) {
+                if (i >= 0 && i < width && j >= 0 && j < height) {
+                    // Check if there is a dot and it is NOT our hero bomb
+                    if (allDots[i, j] != null && allDots[i, j] != activeBomb.gameObject) {
+                        
+                        // Destroy visuals manually
+                        if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
+                        if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+                        
+                        Destroy(allDots[i, j]);
+                        allDots[i, j] = null;
+                    }
+                }
+            }
+        }
+
+        // Apply Gravity (Important! So new pieces fall in for the second pop)
+        DecreaseRow();
+        RefillBoard();
+
+        // Wait 0.5 Seconds
+        yield return new WaitForSeconds(0.5f);
+
+        // PASS 2: Destroy 3x3 again around the bomb's NEW position
+        // (It might have fallen, so we use its current column/row)
+        int newX = activeBomb.column;
+        int newY = activeBomb.row;
+
+        for (int i = newX - 1; i <= newX + 1; i++) {
+            for (int j = newY - 1; j <= newY + 1; j++) {
+                if (i >= 0 && i < width && j >= 0 && j < height) {
+                    if (allDots[i, j] != null) {
+                        Dot d = allDots[i, j].GetComponent<Dot>();
+                        
+                        // Now we destroy everything, including the active bomb
+                        if (!d.isMatched) {
+                            d.isMatched = true;
+                            // Chain Reaction allow
+                            if (d.isBomb) TriggerBomb(d); 
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Resume normal game loop
+        DestroyMatches();
+    }
+
     // --- RECURSIVE BOMB LOGIC ---
+
+    // --- MEGA STRIPES (3-Line Explosions) ---
+
+    public void DestroyRowStrip(int row) {
+        // Destroy Center, Above, and Below
+        if (row >= 0 && row < height) DestroyRow(row);
+        if (row - 1 >= 0) DestroyRow(row - 1);
+        if (row + 1 < height) DestroyRow(row + 1);
+    }
+
+    public void DestroyColumnStrip(int col) {
+        // Destroy Center, Left, and Right
+        if (col >= 0 && col < width) DestroyColumn(col);
+        if (col - 1 >= 0) DestroyColumn(col - 1);
+        if (col + 1 < width) DestroyColumn(col + 1);
+    }
 
     private void TriggerBomb(Dot dot) {
         if (dot.isRowBomb) DestroyRow(dot.row);
@@ -473,41 +548,139 @@ public class Board : MonoBehaviour {
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
     
-    // --- HINT SYSTEM HELPERS (Optional/Future Use) ---
-    // These are currently unused by the main logic but are useful if you add a "No Moves" check later.
-    
+    // --- DEADLOCK & HINT SYSTEM ---
+
+    // --- HINT SYSTEM HELPER ---
+    // Returns a list of the two dots that can be swapped to make a match
     public List<GameObject> CheckForMatches() {
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                if (allDots[x, y] != null) {
-                    if (x < width - 1) if (SwitchAndCheck(x, y, Vector2.right)) return new List<GameObject> { allDots[x, y], allDots[x + 1, y] };
-                    if (y < height - 1) if (SwitchAndCheck(x, y, Vector2.up)) return new List<GameObject> { allDots[x, y], allDots[x, y + 1] };
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (allDots[i, j] != null) {
+                    
+                    // 1. Check Swap Right
+                    if (i < width - 1) {
+                        if (SwitchAndCheck(i, j, Vector2.right)) {
+                            // Found a move! Return the pair.
+                            return new List<GameObject> { allDots[i, j], allDots[i + 1, j] };
+                        }
+                    }
+                    
+                    // 2. Check Swap Up
+                    if (j < height - 1) {
+                        if (SwitchAndCheck(i, j, Vector2.up)) {
+                            // Found a move! Return the pair.
+                            return new List<GameObject> { allDots[i, j], allDots[i, j + 1] };
+                        }
+                    }
                 }
             }
         }
-        return null;
+        return null; // No matches found
     }
+
+    // 1. Check if the board has ANY valid move
+    public bool IsDeadlocked() {
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (allDots[i, j] != null) {
+                    if (i < width - 1) {
+                        if (SwitchAndCheck(i, j, Vector2.right)) return false; // Found a move right
+                    }
+                    if (j < height - 1) {
+                        if (SwitchAndCheck(i, j, Vector2.up)) return false; // Found a move up
+                    }
+                }
+            }
+        }
+        return true; // No moves found anywhere!
+    }
+
+    // 2. Virtual Swap to test if a move works (without actually doing it)
     private bool SwitchAndCheck(int column, int row, Vector2 direction) {
+        // Swap them in the array
         SwitchPieces(column, row, direction);
+        
+        // Check if it created a match
         bool hasMatch = false;
-        if (CheckConnection(column, row) || CheckConnection(column + (int)direction.x, row + (int)direction.y)) hasMatch = true;
+        if (CheckConnection(column, row) || CheckConnection(column + (int)direction.x, row + (int)direction.y)) {
+            hasMatch = true;
+        }
+        
+        // IMPORTANT: Swap them back immediately! We are just "thinking", not moving.
         SwitchPieces(column, row, direction);
         return hasMatch;
     }
+
+    // Helper for swapping in array
     private void SwitchPieces(int column, int row, Vector2 direction) {
-        GameObject holder = allDots[column + (int)direction.x, row + (int)direction.y];
-        allDots[column + (int)direction.x, row + (int)direction.y] = allDots[column, row];
-        allDots[column, row] = holder;
+        if (allDots[column + (int)direction.x, row + (int)direction.y] != null) {
+            GameObject holder = allDots[column + (int)direction.x, row + (int)direction.y];
+            allDots[column + (int)direction.x, row + (int)direction.y] = allDots[column, row];
+            allDots[column, row] = holder;
+        }
     }
+
+    // Helper to check for standard 3-matches
     private bool CheckConnection(int column, int row) {
         if (allDots[column, row] == null) return false;
+        
+        // Check Horizontal
         if (column > 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column - 2, row].tag == allDots[column, row].tag) return true;
         if (column < width - 2 && allDots[column + 1, row].tag == allDots[column, row].tag && allDots[column + 2, row].tag == allDots[column, row].tag) return true;
         if (column > 0 && column < width - 1 && allDots[column - 1, row].tag == allDots[column, row].tag && allDots[column + 1, row].tag == allDots[column, row].tag) return true;
+        
+        // Check Vertical
         if (row > 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row - 2].tag == allDots[column, row].tag) return true;
         if (row < height - 2 && allDots[column, row + 1].tag == allDots[column, row].tag && allDots[column, row + 2].tag == allDots[column, row].tag) return true;
         if (row > 0 && row < height - 1 && allDots[column, row - 1].tag == allDots[column, row].tag && allDots[column, row + 1].tag == allDots[column, row].tag) return true;
+        
         return false;
+    }
+
+    public void ShuffleBoard() {
+        // 1. Create a list of all current dots
+        List<GameObject> currentDots = new List<GameObject>();
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (allDots[i, j] != null) {
+                    currentDots.Add(allDots[i, j]);
+                }
+            }
+        }
+
+        // 2. Shuffle the list randomly
+        for (int i = 0; i < currentDots.Count; i++) {
+            GameObject temp = currentDots[i];
+            int randomIndex = Random.Range(i, currentDots.Count);
+            currentDots[i] = currentDots[randomIndex];
+            currentDots[randomIndex] = temp;
+        }
+
+        // 3. Reassign them to the grid
+        int dotIndex = 0;
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                if (dotIndex < currentDots.Count) {
+                    // Move the GameObject to the new position
+                    GameObject dot = currentDots[dotIndex];
+                    dot.transform.position = new Vector2(i - centerOffset.x, j - centerOffset.y); // Snap to grid
+                    
+                    // Update the Dot Script
+                    Dot d = dot.GetComponent<Dot>();
+                    d.column = i;
+                    d.row = j;
+                    
+                    // Update Board Array
+                    allDots[i, j] = dot;
+                    dotIndex++;
+                }
+            }
+        }
+        
+        // 4. Check if the shuffle failed (still no moves?)
+        if (IsDeadlocked()) {
+            ShuffleBoard(); // Try again! (Recursion)
+        }
     }
     
 }
