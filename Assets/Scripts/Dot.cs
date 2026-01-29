@@ -7,6 +7,11 @@ public class Dot : MonoBehaviour {
     public int column;
     public int row;
     public bool isMatched = false;
+
+    [Header("Attributes")]
+    public bool isStone = false; // Is this an obstacle?
+    public int health = 1;       // How many hits to destroy it
+    public Sprite[] stoneSprites; // Optional: Cracks visuals
     
     [Header("Power-Up Flags")]
     public bool isColorBomb = false;
@@ -24,6 +29,7 @@ public class Dot : MonoBehaviour {
     private Vector3 originalScale; 
     private Board board;
     private GameObject otherDot; // The tile I swapped with
+    private Vector3 firstTouchPosition;
 
     void Awake() {
         originalScale = transform.localScale;
@@ -34,6 +40,15 @@ public class Dot : MonoBehaviour {
         row = y;
         board = boardRef;
         transform.localScale = originalScale;
+    }
+
+    // Update OnMouseDown to PREVENT moving/swapping stones
+    private void OnMouseDown() {
+        // --- ADD THIS BLOCK ---
+        if (isStone || board.currentState != GameState.move) return;
+        // ---------------------
+        
+        firstTouchPosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
     }
 
     void Update() {
@@ -60,11 +75,18 @@ public class Dot : MonoBehaviour {
     void MovePieces(Vector2 direction) {
         otherDot = board.allDots[column + (int)direction.x, row + (int)direction.y];
         if (otherDot != null) {
+            Dot otherScript = otherDot.GetComponent<Dot>();
+
+            // Don't allow swapping with stones
+            if (otherScript.isStone) {
+                board.currentState = GameState.move;
+                return;
+            }
+
             board.currentState = GameState.wait;
             
             // Swap
             int tempCol = column; int tempRow = row;
-            Dot otherScript = otherDot.GetComponent<Dot>();
             column = otherScript.column; row = otherScript.row;
             otherScript.column = tempCol; otherScript.row = tempRow;
             board.allDots[column, row] = this.gameObject;
@@ -249,6 +271,8 @@ public class Dot : MonoBehaviour {
     }
 
     public void FindMatches() {
+        if (isStone) return; // Stones never match!
+
         // FIX: If I am a Color Bomb, I NEVER match on my own. 
         // I only explode via Swap (CheckMoveCo) or Explosion (Board.TriggerBomb)
         if (isColorBomb) return; 
@@ -357,6 +381,18 @@ public class Dot : MonoBehaviour {
         else {
             if (isRowBomb && rowArrow != null) rowArrow.SetActive(true);
             if (isColumnBomb && columnArrow != null) columnArrow.SetActive(true);
+        }
+    }
+
+    // Function to take damage (Called by Board)
+    public bool TakeDamage(int damage) {
+        health -= damage;
+        if (health <= 0) {
+            return true; // "Yes, I am dead."
+        } else {
+            // Optional: Show cracks
+            // GetComponent<SpriteRenderer>().sprite = stoneSprites[health - 1];
+            return false; // "I am still alive."
         }
     }
 }

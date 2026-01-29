@@ -115,8 +115,15 @@ public class Board : MonoBehaviour {
             
             RaycastHit2D hit = Physics2D.Raycast(firstTouchPosition, Vector2.zero);
             if(hit.collider != null && hit.collider.GetComponent<Dot>()) {
-                currentlySelectedDot = hit.collider.GetComponent<Dot>();
-                isSwiping = true;
+                Dot clickedDot = hit.collider.GetComponent<Dot>();
+                
+                // --- FIX: CHECK IF STONE ---
+                // Only select it if it is NOT a stone
+                if (!clickedDot.isStone) { 
+                    currentlySelectedDot = clickedDot;
+                    isSwiping = true;
+                }
+                // ---------------------------
             }
         }
         
@@ -296,12 +303,22 @@ public class Board : MonoBehaviour {
                     Dot dot = allDots[i, j].GetComponent<Dot>();
                     
                     if (dot.isMatched) {
+                        // With immediate stone destruction, this dot should never be a stone.
+
+                        // --- FIX: Damage neighbors BEFORE bomb conversion ---
+                        // This ensures adjacent stones are damaged even if this dot becomes a bomb.
+                        DamageStone(i + 1, j); // Right
+                        DamageStone(i - 1, j); // Left
+                        DamageStone(i, j + 1); // Up
+                        DamageStone(i, j - 1); // Down
+                        // ---------------------------------------------------
+
                         // Create Powerups
                         if (!dot.isBomb) {
                             if (dot.isColorBomb || dot.isAreaBomb || dot.isRowBomb || dot.isColumnBomb) {
                                 dot.isMatched = false;
                                 dot.ActivateBombVisual();
-                                continue;
+                                continue; // Keep this dot, it's a bomb now.
                             }
                         }
 
@@ -311,7 +328,7 @@ public class Board : MonoBehaviour {
                             if (bg != null && bg.hitPoints > 0) bg.TakeDamage(1);
                         }
 
-                        // Score & FX
+                        // Score & FX for destroying the dot
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
 
                         if (floatingScorePrefab != null) {
@@ -332,6 +349,47 @@ public class Board : MonoBehaviour {
         
         if(popSound != null) audioSource.PlayOneShot(popSound);
         if(cameraShake != null) StartCoroutine(cameraShake.Shake(0.15f, 0.05f));
+    }
+
+    private void DamageStone(int x, int y) {
+        // Bounds Check
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+            if (allDots[x, y] != null) {
+                Dot stoneDot = allDots[x, y].GetComponent<Dot>();
+
+                // If it exists, is a stone, and isn't already dying
+                if (stoneDot.isStone && !stoneDot.isMatched) {
+                    // Check if it died from this hit
+                    if (stoneDot.TakeDamage(1)) {
+
+                        // --- FIX 2: IMMEDIATE DESTRUCTION ---
+                        // Don't mark isMatched=true. Just kill it NOW.
+                        // This ensures it pops visually at the exact same frame as the match.
+
+                        stoneDot.isMatched = true; // Mark logic dead
+
+                        // 1. Spawn Score
+                        if(floatingScorePrefab != null) {
+                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[x, y].transform.position, Quaternion.identity);
+                            if(floatText.GetComponent<FloatingText>() != null) {
+                                floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
+                            }
+                        }
+
+                        // 2. Spawn Explosion
+                        if(explosionFX != null) Instantiate(explosionFX, allDots[x, y].transform.position, Quaternion.identity);
+
+                        // 3. Add Score
+                        if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+
+                        // 4. Destroy Object
+                        Destroy(allDots[x, y]);
+                        allDots[x, y] = null; // Clear from board array immediately
+                        // ------------------------------------
+                    }
+                }
+            }
+        }
     }
 
     // --- DOUBLE AREA BOMB SEQUENCE (Pop -> Drop -> Wait -> Pop) ---
@@ -573,25 +631,35 @@ public class Board : MonoBehaviour {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
                     
+                    // --- FIX 1: IGNORE STONES ---
+                    // If this piece is a stone, skip it completely. 
+                    // It cannot be moved, so it can never be part of a hint.
+                    if (allDots[i, j].GetComponent<Dot>().isStone) continue;
+                    // ---------------------------
+
                     // 1. Check Swap Right
                     if (i < width - 1) {
-                        if (SwitchAndCheck(i, j, Vector2.right)) {
-                            // Found a move! Return the pair.
-                            return new List<GameObject> { allDots[i, j], allDots[i + 1, j] };
+                        // Check if neighbor is also NOT a stone
+                        if (allDots[i + 1, j] != null && !allDots[i + 1, j].GetComponent<Dot>().isStone) {
+                            if (SwitchAndCheck(i, j, Vector2.right)) {
+                                return new List<GameObject> { allDots[i, j], allDots[i + 1, j] };
+                            }
                         }
                     }
                     
                     // 2. Check Swap Up
                     if (j < height - 1) {
-                        if (SwitchAndCheck(i, j, Vector2.up)) {
-                            // Found a move! Return the pair.
-                            return new List<GameObject> { allDots[i, j], allDots[i, j + 1] };
+                        // Check if neighbor is also NOT a stone
+                        if (allDots[i, j + 1] != null && !allDots[i, j + 1].GetComponent<Dot>().isStone) {
+                            if (SwitchAndCheck(i, j, Vector2.up)) {
+                                return new List<GameObject> { allDots[i, j], allDots[i, j + 1] };
+                            }
                         }
                     }
                 }
             }
         }
-        return null; // No matches found
+        return null; 
     }
 
     // 1. Check if the board has ANY valid move
