@@ -25,10 +25,14 @@ public class BackgroundScaler : MonoBehaviour {
         // Option A: Stretch to Fill (might distort slightly)
         transform.localScale = new Vector3(Mathf.Max(newScale.x, newScale.y), Mathf.Max(newScale.x, newScale.y), 1);
     }
+    
+    private Vector3 lastCameraPosition;
 
     void Update() {
-        // 6. Follow the Camera position (on X and Y only)
-        // Keep Z at 10 so it stays in the background
-        transform.position = new Vector3(Camera.main.transform.position.x, Camera.main.transform.position.y, 10f);
+        // Optimized: Only update position when camera actually moves
+        if (Camera.main.transform.position != lastCameraPosition) {
+            transform.position = new Vector3(Camera.main.transform.position.x, Camera.main.transform.position.y, 10f);
+            lastCameraPosition = Camera.main.transform.position;
+        }
     }
 }

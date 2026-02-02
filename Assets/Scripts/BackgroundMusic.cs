@@ -26,12 +26,15 @@ public class BackgroundMusic : MonoBehaviour {
 
         // 1. Load & Set Music
         float savedMusic = PlayerPrefs.GetFloat("MusicVolume", 0.5f);
-        float musicdB = (savedMusic <= 0.001f) ? -80f : Mathf.Log10(savedMusic) * 20;
-        mainMixer.SetFloat("MusicVol", musicdB);
+        mainMixer.SetFloat("MusicVol", ConvertToDecibels(savedMusic));
 
         // 2. Load & Set SFX
         float savedSFX = PlayerPrefs.GetFloat("SFXVolume", 0.5f);
-        float sfxdB = (savedSFX <= 0.001f) ? -80f : Mathf.Log10(savedSFX) * 20;
-        mainMixer.SetFloat("SFXVol", sfxdB);
+        mainMixer.SetFloat("SFXVol", ConvertToDecibels(savedSFX));
+    }
+    
+    // Helper method to convert linear volume (0-1) to decibels
+    private float ConvertToDecibels(float linearVolume) {
+        return (linearVolume <= 0.001f) ? -80f : Mathf.Log10(linearVolume) * 20;
     }
 }

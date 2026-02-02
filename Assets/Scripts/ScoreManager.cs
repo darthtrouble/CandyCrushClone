@@ -31,6 +31,8 @@ public class ScoreManager : MonoBehaviour {
         }
     }
     
+    private Coroutine comboResetCoroutine;
+    
     public void HandleCombo() {
         comboMultiplier++;
         
@@ -42,11 +44,14 @@ public class ScoreManager : MonoBehaviour {
             if(textMesh != null) textMesh.text = "Combo x" + comboMultiplier;
         }
         
-        // Cancel previous reset invoke to avoid premature resets
-        CancelInvoke("ResetCombo");
-        
-        // Reset the combo after 2 seconds of inactivity
-        Invoke("ResetCombo", 2f);
+        // Optimized: Use coroutine instead of Invoke for better performance
+        if (comboResetCoroutine != null) StopCoroutine(comboResetCoroutine);
+        comboResetCoroutine = StartCoroutine(ResetComboAfterDelay(2f));
+    }
+    
+    private System.Collections.IEnumerator ResetComboAfterDelay(float delay) {
+        yield return new WaitForSeconds(delay);
+        ResetCombo();
     }
 
     private void ResetCombo() {

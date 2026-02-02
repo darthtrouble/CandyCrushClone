@@ -41,8 +41,8 @@ public class Board : MonoBehaviour {
     [Header("UI & Audio")]
     public TextMeshProUGUI movesText;
     public GameObject pausePanel; 
-    public ScoreManager scoreManager;
-    public EndGameManager endManager; 
+    [SerializeField] private ScoreManager scoreManager; // Use Inspector instead of Find
+    [SerializeField] private EndGameManager endManager; // Use Inspector instead of Find
     public AudioClip popSound;     
     public int scorePerDot = 20;
     public GameObject floatingScorePrefab; // <--- Drag your prefab here in Inspector!
@@ -86,7 +86,11 @@ public class Board : MonoBehaviour {
         allDots = new GameObject[width, height];
         allTiles = new GameObject[width, height];
         
-        if(scoreManager == null) scoreManager = FindFirstObjectByType<ScoreManager>();
+        // Optimized: Prefer Inspector assignment, fallback to Find with warning
+        if(scoreManager == null) {
+            scoreManager = FindFirstObjectByType<ScoreManager>();
+            Debug.LogWarning("Board: ScoreManager not assigned in Inspector, using Find (slow)");
+        }
         
         audioSource = GetComponent<AudioSource>();
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
@@ -211,6 +215,17 @@ public class Board : MonoBehaviour {
         if(row > 1 && allDots[column, row - 1].tag == piece.tag && allDots[column, row - 2].tag == piece.tag) return true;
         return false;
     }
+    
+    // Helper method to spawn floating score text
+    private void SpawnFloatingScore(int score, Vector3 position) {
+        if (floatingScorePrefab != null) {
+            GameObject floatText = Instantiate(floatingScorePrefab, position, Quaternion.identity);
+            FloatingText textComponent = floatText.GetComponent<FloatingText>();
+            if(textComponent != null) {
+                textComponent.SetScore(score);
+            }
+        }
+    }
 
     // --- GAME LOOP ---
 
@@ -243,15 +258,18 @@ public class Board : MonoBehaviour {
             // 3. Accelerate the loop for excitement
             currentDelay = Mathf.Max(minPopDelay, currentDelay * popAcceleration);
 
-            // 4. Check for Chain Reactions
+            // 4. Check for Chain Reactions (Optimized with early exit)
             // We scan the whole board. If anyone formed a new match after falling, loop again!
             matchesExist = false;
-            for (int i = 0; i < width; i++) {
+            for (int i = 0; i < width && !matchesExist; i++) { // Early exit when match found
                 for (int j = 0; j < height; j++) {
                     if (allDots[i, j] != null) {
                         Dot d = allDots[i, j].GetComponent<Dot>();
                         d.FindMatches(); // Force check
-                        if (d.isMatched) matchesExist = true;
+                        if (d.isMatched) {
+                            matchesExist = true;
+                            break; // Exit inner loop early
+                        }
                     }
                 }
             }
@@ -284,34 +302,32 @@ public class Board : MonoBehaviour {
     }
 
     private void DestroyMatchesAt() {
-        // DETONATION LOOP
+        // OPTIMIZED: Single loop for bomb detonation and destruction
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
                     Dot dot = allDots[i, j].GetComponent<Dot>();
+                    
+                    // First, trigger bombs that are matched
                     if (dot.isMatched && dot.isBomb) {
                          TriggerBomb(dot);
                     }
                 }
             }
         }
-
-        // CREATION & VISUALS LOOP
+        
+        // Second pass: Handle destruction and powerup creation
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
                     Dot dot = allDots[i, j].GetComponent<Dot>();
                     
                     if (dot.isMatched) {
-                        // With immediate stone destruction, this dot should never be a stone.
-
-                        // --- FIX: Damage neighbors BEFORE bomb conversion ---
-                        // This ensures adjacent stones are damaged even if this dot becomes a bomb.
+                        // Damage neighbors BEFORE bomb conversion
                         DamageStone(i + 1, j); // Right
                         DamageStone(i - 1, j); // Left
                         DamageStone(i, j + 1); // Up
                         DamageStone(i, j - 1); // Down
-                        // ---------------------------------------------------
 
                         // Create Powerups
                         if (!dot.isBomb) {
@@ -330,14 +346,7 @@ public class Board : MonoBehaviour {
 
                         // Score & FX for destroying the dot
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
-
-                        if (floatingScorePrefab != null) {
-                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[i, j].transform.position, Quaternion.identity);
-                            if(floatText.GetComponent<FloatingText>() != null) {
-                                floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
-                            }
-                        }
-
+                        SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         
                         Destroy(allDots[i, j]);
@@ -368,13 +377,8 @@ public class Board : MonoBehaviour {
 
                         stoneDot.isMatched = true; // Mark logic dead
 
-                        // 1. Spawn Score
-                        if(floatingScorePrefab != null) {
-                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[x, y].transform.position, Quaternion.identity);
-                            if(floatText.GetComponent<FloatingText>() != null) {
-                                floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
-                            }
-                        }
+                        // 1. Spawn Score using helper
+                        SpawnFloatingScore(scorePerDot, allDots[x, y].transform.position);
 
                         // 2. Spawn Explosion
                         if(explosionFX != null) Instantiate(explosionFX, allDots[x, y].transform.position, Quaternion.identity);
@@ -405,12 +409,8 @@ public class Board : MonoBehaviour {
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
 
-                        // --- NEW: FLOATING TEXT ---
-                        if (floatingScorePrefab != null) {
-                            GameObject floatText = Instantiate(floatingScorePrefab, allDots[i, j].transform.position, Quaternion.identity);
-                            floatText.GetComponent<FloatingText>().SetScore(scorePerDot);
-                        }
-                        // --------------------------
+                        // Floating score using helper
+                        SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
                         
                         Destroy(allDots[i, j]);
                         allDots[i, j] = null;
@@ -549,9 +549,12 @@ public class Board : MonoBehaviour {
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] == null) nullCount++;
                 else if (nullCount > 0) {
-                    allDots[x, y].GetComponent<Dot>().row -= nullCount;
+                    Dot dotScript = allDots[x, y].GetComponent<Dot>();
+                    dotScript.row -= nullCount;
                     allDots[x, y - nullCount] = allDots[x, y];
                     allDots[x, y] = null;
+                    // CRITICAL FIX: Trigger movement animation after repositioning
+                    dotScript.StartMoving();
                 }
             }
         }

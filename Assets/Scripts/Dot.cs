@@ -40,6 +40,7 @@ public class Dot : MonoBehaviour {
         row = y;
         board = boardRef;
         transform.localScale = originalScale;
+        StartMoving(); // Trigger movement animation
     }
 
     // Update OnMouseDown to PREVENT moving/swapping stones
@@ -51,16 +52,31 @@ public class Dot : MonoBehaviour {
         firstTouchPosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
     }
 
-    void Update() {
-        if(board == null) return;
-        // Smooth Movement
+    // Optimized: Only move when position changes instead of checking every frame
+    private Coroutine moveCoroutine;
+    
+    public void StartMoving() {
+        if (moveCoroutine != null) StopCoroutine(moveCoroutine);
+        moveCoroutine = StartCoroutine(SmoothMove());
+    }
+    
+    private IEnumerator SmoothMove() {
+        if(board == null) yield break;
+        
         float targetX = column - board.centerOffset.x;
         float targetY = row - board.centerOffset.y;
-        if (Mathf.Abs(targetX - transform.position.x) > .1f) transform.position = Vector2.Lerp(transform.position, new Vector2(targetX, transform.position.y), .6f);
-        else transform.position = new Vector2(targetX, transform.position.y);
-        if (Mathf.Abs(targetY - transform.position.y) > .1f) transform.position = Vector2.Lerp(transform.position, new Vector2(transform.position.x, targetY), .6f);
-        else transform.position = new Vector2(transform.position.x, targetY);
         
+        while (Mathf.Abs(targetX - transform.position.x) > .01f || Mathf.Abs(targetY - transform.position.y) > .01f) {
+            targetX = column - board.centerOffset.x;
+            targetY = row - board.centerOffset.y;
+            
+            transform.position = Vector2.Lerp(transform.position, new Vector2(targetX, targetY), .6f);
+            board.allDots[column, row] = this.gameObject;
+            yield return null;
+        }
+        
+        // Snap to final position
+        transform.position = new Vector2(targetX, targetY);
         board.allDots[column, row] = this.gameObject;
     }
 
@@ -91,6 +107,10 @@ public class Dot : MonoBehaviour {
             otherScript.column = tempCol; otherScript.row = tempRow;
             board.allDots[column, row] = this.gameObject;
             board.allDots[otherScript.column, otherScript.row] = otherDot;
+            
+            // Trigger movement animations
+            StartMoving();
+            otherScript.StartMoving();
             
             StartCoroutine(CheckMoveCo());
         } else {
@@ -209,6 +229,11 @@ public class Dot : MonoBehaviour {
                 otherScript.column = tempCol; otherScript.row = tempRow;
                 board.allDots[column, row] = this.gameObject;
                 board.allDots[otherScript.column, otherScript.row] = otherDot;
+                
+                // Trigger movement animations for swap back
+                StartMoving();
+                otherScript.StartMoving();
+                
                 yield return new WaitForSeconds(.2f);
                 board.currentState = GameState.move;
             } else {
