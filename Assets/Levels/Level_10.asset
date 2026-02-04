@@ -10,19 +10,19 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 60dd7d996fb47094688a3dd4f8d35090, type: 3}
-  m_Name: Level_2
+  m_Name: Level_10
   m_EditorClassIdentifier: Assembly-CSharp::LevelData
   width: 6
   height: 8
   moves: 15
   objectives:
-  - objectiveType: 1
-    targetScore: 0
-    animalTag: Bear
-    targetAmount: 10
+  - objectiveType: 0
+    targetScore: 10000
+    animalTag: 
+    targetAmount: 0
     timeLimit: 0
-  oneStarScore: 600
-  twoStarScore: 900
-  threeStarScore: 1200
+  oneStarScore: 10000
+  twoStarScore: 15000
+  threeStarScore: 20000
   iceTiles: []
-  difficulty: Easy
+  difficulty: Boss

@@ -54,13 +54,21 @@ public class Board : MonoBehaviour {
 
     // References
     private AudioSource audioSource;
+    private ObjectiveUI objectiveUI; //Auto-found
     private CameraShake cameraShake;
     private HintManager hintManager; 
 
-    // State
-    public GameObject[,] allDots;
+    // State - OPTIMIZED: Store Dot components directly instead of GameObjects
+    public Dot[,] allDots;
     public GameObject[,] allTiles; 
     public GameState currentState = GameState.move;
+    
+    // Objective Tracking
+    private Dictionary<string, int> animalCollectionCount = new Dictionary<string, int>();
+    private int icetilesRemaining = 0;
+    private float timeRemaining = 0f;
+    private bool isTimedChallenge = false;
+    private LevelData currentLevelData;
     
     // Input
     private GameControls gameControls; 
@@ -74,16 +82,21 @@ public class Board : MonoBehaviour {
         currentLevelIndex = PlayerPrefs.GetInt("CurrentLevel", 0);
 
         if(levels != null && currentLevelIndex < levels.Length) {
-            LevelData data = levels[currentLevelIndex];
-            width = data.width;
-            height = data.height;
-            movesLeft = data.moves;
-            levelGoal = data.scoreGoal;
+            currentLevelData = levels[currentLevelIndex];
+            width = currentLevelData.width;
+            height = currentLevelData.height;
+            movesLeft = currentLevelData.moves;
+            
+            // For backward compatibility with existing level data or simple score objectives
+            levelGoal = currentLevelData.oneStarScore; // Default to 1-star threshold
+            
+            // Initialize objective trackers
+            InitializeObjectives();
         } else {
             width = 6; height = 8; movesLeft = 20; levelGoal = 1000;
         }
 
-        allDots = new GameObject[width, height];
+        allDots = new Dot[width, height];
         allTiles = new GameObject[width, height];
         
         // Optimized: Prefer Inspector assignment, fallback to Find with warning
@@ -95,6 +108,7 @@ public class Board : MonoBehaviour {
         audioSource = GetComponent<AudioSource>();
         if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
         
+        objectiveUI = FindFirstObjectByType<ObjectiveUI>();
         cameraShake = Camera.main.GetComponent<CameraShake>();
         hintManager = FindFirstObjectByType<HintManager>();
     }
@@ -110,6 +124,23 @@ public class Board : MonoBehaviour {
 
     void Update() {
         if (currentState == GameState.pause || currentState == GameState.win || currentState == GameState.lose || currentState == GameState.wait) return;
+
+        // Timer for timed challenges
+        if (isTimedChallenge && currentState == GameState.move) {
+            timeRemaining -= Time.deltaTime;
+            if (objectiveUI != null) {
+                objectiveUI.UpdateTimer(timeRemaining);
+            }
+            
+            // Time up - trigger loss if objectives not met
+            if (timeRemaining <= 0) {
+                timeRemaining = 0;
+                if (!CheckAllObjectivesComplete()) {
+                    currentState = GameState.lose;
+                    if(endManager != null) endManager.ShowLose(scoreManager.score);
+                }
+            }
+        }
 
         if (gameControls.Gameplay.Fire.WasPerformedThisFrame()) {
             if(hintManager != null) hintManager.ResetTimer(); 
@@ -153,19 +184,33 @@ public class Board : MonoBehaviour {
 
     private void Setup() {
         centerOffset = new Vector2((width - 1) / 2f, (height - 1) / 2f);
-        Camera.main.transform.position = new Vector3(0, 0, -10f);
+        
+        // OFFSET CAMERA Y: Adjusted to be more subtle (1.5f instead of 3f)
+        // This shifts the board down just enough for the UI, but keeps it large
+        float cameraYOffset = 1.5f; 
+        Camera.main.transform.position = new Vector3(0, cameraYOffset, -10f);
 
+        // ADJUST ZOOM: Removed extra top space to keep board larger
+        // The offset alone should be enough since we have padding
         float verticalSize = (height / 2f) + borderPadding + extraVerticalPadding;
         float horizontalSize = ((width / 2f) + borderPadding) / Camera.main.aspect;
+        
         Camera.main.orthographicSize = Mathf.Max(verticalSize, horizontalSize);
 
         if(boardBackground != null) {
+            // FIX: Revert to standard board framing
+            // Center background on the board (0,0), NOT the camera
             boardBackground.transform.position = new Vector3(0, 0, 5f); 
+            
             SpriteRenderer sr = boardBackground.GetComponent<SpriteRenderer>();
+            // Strict sizing to just cover the dots + padding
+            float bgWidth = width + borderPadding; 
+            float bgHeight = height + borderPadding;
+            
             if(sr != null && sr.drawMode == SpriteDrawMode.Sliced) {
-                sr.size = new Vector2(width + borderPadding, height + borderPadding);
+                sr.size = new Vector2(bgWidth, bgHeight);
             } else {
-                boardBackground.transform.localScale = new Vector3(width + borderPadding, height + borderPadding, 1);
+                boardBackground.transform.localScale = new Vector3(bgWidth, bgHeight, 1);
             }
             if(sr) sr.sortingLayerName = "Board"; 
         }
@@ -204,8 +249,9 @@ public class Board : MonoBehaviour {
                 GameObject dot = Instantiate(dots[dotToUse], spawnPos, Quaternion.identity);
                 dot.transform.parent = this.transform;
                 dot.name = $"Animal ( {x}, {y} )";
-                dot.GetComponent<Dot>().Setup(x, y, this);
-                allDots[x, y] = dot;
+                Dot dotComponent = dot.GetComponent<Dot>();
+                dotComponent.Setup(x, y, this);
+                allDots[x, y] = dotComponent; // Store component directly
             }
         }
     }
@@ -225,6 +271,140 @@ public class Board : MonoBehaviour {
                 textComponent.SetScore(score);
             }
         }
+    }
+    
+    // ===== OBJECTIVE TRACKING METHODS =====
+    
+    private void InitializeObjectives() {
+        Debug.Log("[Board] InitializeObjectives called");
+        
+        if (currentLevelData == null) {
+            Debug.LogError("[Board] currentLevelData is NULL!");
+            return;
+        }
+        
+        if (currentLevelData.objectives.Count == 0) {
+            Debug.LogWarning("[Board] No objectives found in LevelData!");
+            return;
+        }
+        
+        if (objectiveUI == null) {
+            objectiveUI = FindFirstObjectByType<ObjectiveUI>();
+            if (objectiveUI == null) {
+                Debug.LogWarning("[Board] ObjectiveUI script missing from scene. Auto-creating 'ObjectiveManager'...");
+                GameObject mgr = new GameObject("ObjectiveManager");
+                objectiveUI = mgr.AddComponent<ObjectiveUI>();
+            } else {
+                Debug.Log($"[Board] Found ObjectiveUI on {objectiveUI.gameObject.name}");
+            }
+        }
+        
+        // Initialize trackers based on objectives
+        if (objectiveUI != null) {
+            // Safety check for UI readiness
+            if (objectiveUI.objectivePanel == null && objectiveUI.objectiveContainer == null) {
+                 // It will try to auto-create, but let's log it
+                 Debug.Log("[Board] ObjectiveUI has missing references, triggering auto-setup...");
+            }
+            
+            Debug.Log("[Board] Sending objectives to UI...");
+            objectiveUI.SetupObjectives(currentLevelData.objectives);
+        }
+        
+        // Initialize trackers based on objectives
+        foreach (var objective in currentLevelData.objectives) {
+            switch (objective.objectiveType) {
+                case LevelObjectiveType.CollectAnimals:
+                    if (!animalCollectionCount.ContainsKey(objective.animalTag)) {
+                        animalCollectionCount[objective.animalTag] = 0;
+                    }
+                    break;
+                    
+                case LevelObjectiveType.ClearIce:
+                    icetilesRemaining = currentLevelData.iceTiles != null ? currentLevelData.iceTiles.Count : 0;
+                    break;
+                    
+                case LevelObjectiveType.TimedChallenge:
+                    isTimedChallenge = true;
+                    timeRemaining = objective.timeLimit;
+                    Debug.Log($"[Board] Timer started: {timeRemaining}s");
+                    break;
+            }
+        }
+    }
+    
+    // Call this whenever animals are destroyed
+    public void OnAnimalCollected(string animalTag) {
+        if (animalCollectionCount.ContainsKey(animalTag)) {
+            animalCollectionCount[animalTag]++;
+            
+            // Update UI - LOOP through all objectives to find the right one(s)
+            // Fixes bug where Level 3 (multi-collection) only updated the first animal type
+            if (currentLevelData != null && objectiveUI != null) {
+                foreach (var obj in currentLevelData.objectives) {
+                    if (obj.objectiveType == LevelObjectiveType.CollectAnimals && obj.animalTag == animalTag) {
+                        objectiveUI.UpdateObjectiveProgress(
+                            LevelObjectiveType.CollectAnimals,
+                            animalCollectionCount[animalTag],
+                            obj.targetAmount,
+                            animalTag
+                        );
+                    }
+                }
+            }
+        }
+    }
+    
+    // Call this when ice is destroyed
+    public void OnIceDestroyed() {
+        if (icetilesRemaining > 0) {
+            icetilesRemaining--;
+            
+            // Update UI
+            if (currentLevelData != null && objectiveUI != null) {
+                 // Optimization: Directly find the ice objective since there is usually only one
+                 var objective = currentLevelData.objectives.Find(o => o.objectiveType == LevelObjectiveType.ClearIce);
+                 if (objective != null) {
+                    int totalIce = currentLevelData.iceTiles != null ? currentLevelData.iceTiles.Count : 0;
+                    objectiveUI.UpdateObjectiveProgress(
+                        LevelObjectiveType.ClearIce,
+                        totalIce - icetilesRemaining,
+                        totalIce
+                    );
+                 }
+            }
+        }
+    }
+    
+    // Enhanced win condition check
+    private bool CheckAllObjectivesComplete() {
+        if (currentLevelData == null || currentLevelData.objectives.Count == 0) {
+            // Fallback to old score-based system
+            return scoreManager != null && scoreManager.score >= levelGoal;
+        }
+        
+        foreach (var objective in currentLevelData.objectives) {
+            switch (objective.objectiveType) {
+                case LevelObjectiveType.Score:
+                case LevelObjectiveType.TimedChallenge:
+                    if (scoreManager == null || scoreManager.score < objective.targetScore)
+                        return false;
+                    break;
+                    
+                case LevelObjectiveType.CollectAnimals:
+                    if (!animalCollectionCount.ContainsKey(objective.animalTag) ||
+                        animalCollectionCount[objective.animalTag] < objective.targetAmount)
+                        return false;
+                    break;
+                    
+                case LevelObjectiveType.ClearIce:
+                    if (icetilesRemaining > 0)
+                        return false;
+                    break;
+            }
+        }
+        
+        return true;
     }
 
     // --- GAME LOOP ---
@@ -264,7 +444,7 @@ public class Board : MonoBehaviour {
             for (int i = 0; i < width && !matchesExist; i++) { // Early exit when match found
                 for (int j = 0; j < height; j++) {
                     if (allDots[i, j] != null) {
-                        Dot d = allDots[i, j].GetComponent<Dot>();
+                        Dot d = allDots[i, j]; // Direct access, no GetComponent
                         d.FindMatches(); // Force check
                         if (d.isMatched) {
                             matchesExist = true;
@@ -275,22 +455,17 @@ public class Board : MonoBehaviour {
             }
         }
         
+        
         // 5. DEADLOCK CHECK
         if (IsDeadlocked()) {
             Debug.Log("Deadlock detected! Shuffling...");
             ShuffleBoard();
         }
         
-        // --- WIN / LOSE CONDITIONS ---
-        if (scoreManager.score >= levelGoal) {
-            currentState = GameState.win;
-            if(endManager != null) endManager.ShowWin(scoreManager.score, levelGoal);
-            
-            int unlockedLevels = PlayerPrefs.GetInt("UnlockedLevel", 1);
-            if (currentLevelIndex + 1 >= unlockedLevels) {
-                PlayerPrefs.SetInt("UnlockedLevel", currentLevelIndex + 2);
-                PlayerPrefs.Save();
-            }
+        // --- WIN / LOSE CONDITIONS (Enhanced for Objectives) ---
+        if (CheckAllObjectivesComplete()) {
+            currentState = GameState.win; // Lock input
+            yield return StartCoroutine(ProcessBonusMoves());
         } 
         else if (movesLeft <= 0) {
             currentState = GameState.lose;
@@ -301,12 +476,87 @@ public class Board : MonoBehaviour {
         }
     }
 
+    // BONUS SEQUENCE: Convert remaining moves to bombs
+    private IEnumerator ProcessBonusMoves() {
+        // Skip bonus moves if it's a timed challenge (infinite moves or time-based)
+        if (isTimedChallenge) {
+             Debug.Log("Timed Level - Skipping Bonus Moves Sequence.");
+             yield return new WaitForSeconds(0.5f);
+        }
+        else {
+            if (movesLeft > 0) {
+                // Visual feedback for bonus phase?
+                Debug.Log("BONUS ROUND STARTED!");
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            // Loop to convert remaining moves
+            while (movesLeft > 0) {
+                movesLeft--;
+                UpdateMovesText();
+                if(audioSource && popSound) audioSource.PlayOneShot(popSound);
+
+                // 1. Pick a random valid spot
+                List<Dot> candidates = new List<Dot>();
+                for (int i = 0; i < width; i++) {
+                    for (int j = 0; j < height; j++) {
+                        if (allDots[i, j] != null && !allDots[i, j].isMatched && !allDots[i, j].isBomb) {
+                            candidates.Add(allDots[i, j]);
+                        }
+                    }
+                }
+
+                if (candidates.Count > 0) {
+                    Dot target = candidates[Random.Range(0, candidates.Count)];
+                    
+                    // 2. Turn it into a bomb (Row or Column)
+                    target.isMatched = false;
+                    if (Random.value > 0.5f) {
+                        target.MakeRowBomb();
+                    } else {
+                        target.MakeColumnBomb();
+                    }
+                    
+                    // 3. Detonate immediately (creating score and visual chaos)
+                    TriggerBomb(target);
+                    
+                    // Small delay between explosions
+                    yield return new WaitForSeconds(0.2f);
+                    
+                    // Clean up any debris created by the bomb
+                    DestroyMatchesAt();
+                    DecreaseRow();
+                    RefillBoard();
+                } else {
+                    // No valid candidates? Just give points
+                    if(scoreManager != null) scoreManager.IncreaseScore(1000);
+                }
+                
+                yield return new WaitForSeconds(0.1f);
+            }
+        }
+
+        // Final Wait
+        yield return new WaitForSeconds(1f);
+
+        // Standard Win Procedure
+        int stars = currentLevelData != null ? currentLevelData.GetStarRating(scoreManager.score) : 1;
+        
+        // FIX: Ensure player receives at least 1 star if they BEAT the level objectives
+        // This prevents the "I won but got 0 stars" frustration
+        if (stars == 0) stars = 1;
+
+        LevelProgressManager.SaveStars(currentLevelIndex, stars);
+        LevelProgressManager.UnlockNextLevel(currentLevelIndex);
+        if(endManager != null) endManager.ShowWin(scoreManager.score, stars, currentLevelIndex);
+    }
+
     private void DestroyMatchesAt() {
         // OPTIMIZED: Single loop for bomb detonation and destruction
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
-                    Dot dot = allDots[i, j].GetComponent<Dot>();
+                    Dot dot = allDots[i, j]; // Direct access
                     
                     // First, trigger bombs that are matched
                     if (dot.isMatched && dot.isBomb) {
@@ -320,7 +570,7 @@ public class Board : MonoBehaviour {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
-                    Dot dot = allDots[i, j].GetComponent<Dot>();
+                    Dot dot = allDots[i, j]; // Direct access
                     
                     if (dot.isMatched) {
                         // Damage neighbors BEFORE bomb conversion
@@ -334,6 +584,7 @@ public class Board : MonoBehaviour {
                             if (dot.isColorBomb || dot.isAreaBomb || dot.isRowBomb || dot.isColumnBomb) {
                                 dot.isMatched = false;
                                 dot.ActivateBombVisual();
+                                OnAnimalCollected(dot.tag); // Count the transformation as collected
                                 continue; // Keep this dot, it's a bomb now.
                             }
                         }
@@ -341,15 +592,25 @@ public class Board : MonoBehaviour {
                         // Damage Ice
                         if (allTiles[i, j] != null) {
                             BackgroundTile bg = allTiles[i, j].GetComponent<BackgroundTile>();
-                            if (bg != null && bg.hitPoints > 0) bg.TakeDamage(1);
+                            if (bg != null && bg.hitPoints > 0) {
+                                int oldHP = bg.hitPoints;
+                                bg.TakeDamage(1);
+                                // Track ice destruction for objectives
+                                if (oldHP > 0 && bg.hitPoints == 0) {
+                                    OnIceDestroyed();
+                                }
+                            }
                         }
+
+                        // Track animal collection for objectives
+                        OnAnimalCollected(dot.tag);
 
                         // Score & FX for destroying the dot
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
                         SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         
-                        Destroy(allDots[i, j]);
+                        Destroy(allDots[i, j].gameObject); // Destroy the GameObject, not just the component
                         allDots[i, j] = null;
                     }
                 }
@@ -364,7 +625,7 @@ public class Board : MonoBehaviour {
         // Bounds Check
         if (x >= 0 && x < width && y >= 0 && y < height) {
             if (allDots[x, y] != null) {
-                Dot stoneDot = allDots[x, y].GetComponent<Dot>();
+                Dot stoneDot = allDots[x, y]; // Direct access
 
                 // If it exists, is a stone, and isn't already dying
                 if (stoneDot.isStone && !stoneDot.isMatched) {
@@ -387,7 +648,7 @@ public class Board : MonoBehaviour {
                         if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
 
                         // 4. Destroy Object
-                        Destroy(allDots[x, y]);
+                        Destroy(allDots[x, y].gameObject); // Destroy the GameObject
                         allDots[x, y] = null; // Clear from board array immediately
                         // ------------------------------------
                     }
@@ -403,7 +664,7 @@ public class Board : MonoBehaviour {
             for (int j = y - 1; j <= y + 1; j++) {
                 if (i >= 0 && i < width && j >= 0 && j < height) {
                     // Check if there is a dot and it is NOT our hero bomb
-                    if (allDots[i, j] != null && allDots[i, j] != activeBomb.gameObject) {
+                    if (allDots[i, j] != null && allDots[i, j] != activeBomb) {
                         
                         // Destroy visuals manually
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
@@ -412,7 +673,7 @@ public class Board : MonoBehaviour {
                         // Floating score using helper
                         SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
                         
-                        Destroy(allDots[i, j]);
+                        Destroy(allDots[i, j].gameObject); // Destroy the GameObject
                         allDots[i, j] = null;
                     }
                 }
@@ -435,7 +696,7 @@ public class Board : MonoBehaviour {
             for (int j = newY - 1; j <= newY + 1; j++) {
                 if (i >= 0 && i < width && j >= 0 && j < height) {
                     if (allDots[i, j] != null) {
-                        Dot d = allDots[i, j].GetComponent<Dot>();
+                        Dot d = allDots[i, j]; // Direct access
                         
                         // Now we destroy everything, including the active bomb
                         if (!d.isMatched) {
@@ -480,7 +741,7 @@ public class Board : MonoBehaviour {
     private void DestroyRow(int rowToDestroy) {
         for (int i = 0; i < width; i++) {
             if (allDots[i, rowToDestroy] != null) {
-                Dot dot = allDots[i, rowToDestroy].GetComponent<Dot>();
+                Dot dot = allDots[i, rowToDestroy]; // Direct access
                 if (!dot.isMatched) {
                     dot.isMatched = true;
                     if (dot.isBomb) TriggerBomb(dot); // Chain Reaction
@@ -492,7 +753,7 @@ public class Board : MonoBehaviour {
     private void DestroyColumn(int colToDestroy) {
         for (int j = 0; j < height; j++) {
             if (allDots[colToDestroy, j] != null) {
-                Dot dot = allDots[colToDestroy, j].GetComponent<Dot>();
+                Dot dot = allDots[colToDestroy, j]; // Direct access
                 if (!dot.isMatched) {
                     dot.isMatched = true;
                     if (dot.isBomb) TriggerBomb(dot);
@@ -506,7 +767,7 @@ public class Board : MonoBehaviour {
             for (int j = centerRow - 1; j <= centerRow + 1; j++) {
                 if (i >= 0 && i < width && j >= 0 && j < height) {
                     if (allDots[i, j] != null) {
-                        Dot dot = allDots[i, j].GetComponent<Dot>();
+                        Dot dot = allDots[i, j]; // Direct access
                         if (!dot.isMatched) {
                             dot.isMatched = true;
                             if (dot.isBomb) TriggerBomb(dot);
@@ -521,7 +782,7 @@ public class Board : MonoBehaviour {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
-                    Dot dot = allDots[i, j].GetComponent<Dot>();
+                    Dot dot = allDots[i, j]; // Direct access
                     if (allDots[i, j].tag == colorTag && !dot.isMatched) {
                         dot.isMatched = true;
                         if (dot.isBomb) TriggerBomb(dot);
@@ -535,7 +796,7 @@ public class Board : MonoBehaviour {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
-                    allDots[i, j].GetComponent<Dot>().isMatched = true;
+                    allDots[i, j].isMatched = true; // Direct property access
                 }
             }
         }
@@ -549,7 +810,7 @@ public class Board : MonoBehaviour {
             for (int y = 0; y < height; y++) {
                 if (allDots[x, y] == null) nullCount++;
                 else if (nullCount > 0) {
-                    Dot dotScript = allDots[x, y].GetComponent<Dot>();
+                    Dot dotScript = allDots[x, y]; // Direct access
                     dotScript.row -= nullCount;
                     allDots[x, y - nullCount] = allDots[x, y];
                     allDots[x, y] = null;
@@ -581,8 +842,9 @@ public class Board : MonoBehaviour {
                     GameObject piece = Instantiate(dots[dotToUse], tempPosition, Quaternion.identity);
                     piece.transform.parent = this.transform;
                     piece.name = $"Animal ( {x}, {y} )";
-                    piece.GetComponent<Dot>().Setup(x, y, this);
-                    allDots[x, y] = piece;
+                    Dot dotComponent = piece.GetComponent<Dot>();
+                    dotComponent.Setup(x, y, this);
+                    allDots[x, y] = dotComponent; // Store component directly
                     piece.GetComponent<SpriteRenderer>().sortingLayerName = "Units";
                 }
             }
@@ -629,7 +891,7 @@ public class Board : MonoBehaviour {
 
     // --- HINT SYSTEM HELPER ---
     // Returns a list of the two dots that can be swapped to make a match
-    public List<GameObject> CheckForMatches() {
+    public List<Dot> CheckForMatches() { // Returns Dot components now
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
@@ -637,15 +899,15 @@ public class Board : MonoBehaviour {
                     // --- FIX 1: IGNORE STONES ---
                     // If this piece is a stone, skip it completely. 
                     // It cannot be moved, so it can never be part of a hint.
-                    if (allDots[i, j].GetComponent<Dot>().isStone) continue;
+                    if (allDots[i, j].isStone) continue; // Direct property access
                     // ---------------------------
 
                     // 1. Check Swap Right
                     if (i < width - 1) {
                         // Check if neighbor is also NOT a stone
-                        if (allDots[i + 1, j] != null && !allDots[i + 1, j].GetComponent<Dot>().isStone) {
+                        if (allDots[i + 1, j] != null && !allDots[i + 1, j].isStone) {
                             if (SwitchAndCheck(i, j, Vector2.right)) {
-                                return new List<GameObject> { allDots[i, j], allDots[i + 1, j] };
+                                return new List<Dot> { allDots[i, j], allDots[i + 1, j] };
                             }
                         }
                     }
@@ -653,9 +915,9 @@ public class Board : MonoBehaviour {
                     // 2. Check Swap Up
                     if (j < height - 1) {
                         // Check if neighbor is also NOT a stone
-                        if (allDots[i, j + 1] != null && !allDots[i, j + 1].GetComponent<Dot>().isStone) {
+                        if (allDots[i, j + 1] != null && !allDots[i, j + 1].isStone) {
                             if (SwitchAndCheck(i, j, Vector2.up)) {
-                                return new List<GameObject> { allDots[i, j], allDots[i, j + 1] };
+                                return new List<Dot> { allDots[i, j], allDots[i, j + 1] };
                             }
                         }
                     }
@@ -701,7 +963,7 @@ public class Board : MonoBehaviour {
     // Helper for swapping in array
     private void SwitchPieces(int column, int row, Vector2 direction) {
         if (allDots[column + (int)direction.x, row + (int)direction.y] != null) {
-            GameObject holder = allDots[column + (int)direction.x, row + (int)direction.y];
+            Dot holder = allDots[column + (int)direction.x, row + (int)direction.y]; // Changed to Dot
             allDots[column + (int)direction.x, row + (int)direction.y] = allDots[column, row];
             allDots[column, row] = holder;
         }
@@ -724,9 +986,18 @@ public class Board : MonoBehaviour {
         return false;
     }
 
+    private int shuffleAttempts = 0;
+ const int MAX_SHUFFLE_ATTEMPTS = 10;
+    
     public void ShuffleBoard() {
+        shuffleAttempts++;
+        if (shuffleAttempts > MAX_SHUFFLE_ATTEMPTS) {
+            Debug.LogError("ShuffleBoard: Max shuffle attempts reached! Board may be unsolvable.");
+            return;
+        }
+        
         // 1. Create a list of all current dots
-        List<GameObject> currentDots = new List<GameObject>();
+        List<Dot> currentDots = new List<Dot>(); // Changed to Dot
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
@@ -735,9 +1006,9 @@ public class Board : MonoBehaviour {
             }
         }
 
-        // 2. Shuffle the list randomly
+        // 2. Shuffle the list randomly (Fisher-Yates)
         for (int i = 0; i < currentDots.Count; i++) {
-            GameObject temp = currentDots[i];
+            Dot temp = currentDots[i]; // Changed to Dot
             int randomIndex = Random.Range(i, currentDots.Count);
             currentDots[i] = currentDots[randomIndex];
             currentDots[randomIndex] = temp;
@@ -748,17 +1019,11 @@ public class Board : MonoBehaviour {
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (dotIndex < currentDots.Count) {
-                    // Move the GameObject to the new position
-                    GameObject dot = currentDots[dotIndex];
-                    dot.transform.position = new Vector2(i - centerOffset.x, j - centerOffset.y); // Snap to grid
-                    
-                    // Update the Dot Script
-                    Dot d = dot.GetComponent<Dot>();
-                    d.column = i;
-                    d.row = j;
-                    
-                    // Update Board Array
-                    allDots[i, j] = dot;
+                    Dot dotComponent = currentDots[dotIndex]; // Direct Dot reference
+                    dotComponent.transform.position = new Vector2(i - centerOffset.x, j - centerOffset.y);
+                    dotComponent.column = i;
+                    dotComponent.row = j;
+                    allDots[i, j] = dotComponent; // Store component
                     dotIndex++;
                 }
             }
@@ -766,7 +1031,9 @@ public class Board : MonoBehaviour {
         
         // 4. Check if the shuffle failed (still no moves?)
         if (IsDeadlocked()) {
-            ShuffleBoard(); // Try again! (Recursion)
+            ShuffleBoard(); // Try again! (Recursion with safety limit)
+        } else {
+            shuffleAttempts = 0; // Reset counter on success
         }
     }
     

@@ -1,0 +1,115 @@
+// ========================================
+// OBJECTIVE TRACKING METHODS
+// Add these methods to Board.cs after the Start() method
+// ========================================
+
+    private void InitializeObjectives() {
+        if (currentLevelData == null || currentLevelData.objectives.Count == 0) return;
+        
+        // Setup UI if available
+        if (objectiveUI != null) {
+            objectiveUI.SetupObjectives(currentLevelData.objectives);
+        }
+        
+        // Initialize trackers based on objectives
+        foreach (var objective in currentLevelData.objectives) {
+            switch (objective.objectiveType) {
+                case LevelObjectiveType.CollectAnimals:
+                    if (!animalCollectionCount.ContainsKey(objective.animalTag)) {
+                        animalCollectionCount[objective.animalTag] = 0;
+                    }
+                    break;
+                    
+                case LevelObjectiveType.ClearIce:
+                    icetilesRemaining = currentLevelData.iceTiles != null ? currentLevelData.iceTiles.Count : 0;
+                    break;
+                    
+                case LevelObjectiveType.TimedChallenge:
+                    isTimedChallenge = true;
+                    timeRemaining = objective.timeLimit;
+                    break;
+            }
+        }
+    }
+    
+    private void Update() {
+        // Timer for timed challenges
+        if (isTimedChallenge && currentState == GameState.move) {
+            timeRemaining -= Time.deltaTime;
+            if (objectiveUI != null) {
+                objectiveUI.UpdateTimer(timeRemaining);
+            }
+            
+            // Time up!
+            if (timeRemaining <= 0) {
+                timeRemaining = 0;
+                CheckWinCondition(); // Will trigger lose if objectives not met
+            }
+        }
+    }
+    
+    // Call this whenever animals are destroyed
+    public void OnAnimalCollected(string animalTag) {
+        if (animalCollectionCount.ContainsKey(animalTag)) {
+            animalCollectionCount[animalTag]++;
+            
+            // Update UI
+            var objective = currentLevelData.GetObjective(LevelObjectiveType.CollectAnimals);
+            if (objective != null && objective.animalTag == animalTag && objectiveUI != null) {
+                objectiveUI.UpdateObjectiveProgress(
+                    LevelObjectiveType.CollectAnimals,
+                    animalCollectionCount[animalTag],
+                    objective.targetAmount
+                );
+            }
+        }
+    }
+    
+    // Call this when ice is destroyed
+    public void OnIceDestroyed() {
+        if (icetilesRemaining > 0) {
+            icetilesRemaining--;
+            
+            // Update UI
+            var objective = currentLevelData.GetObjective(LevelObjectiveType.ClearIce);
+            if (objective != null && objectiveUI != null) {
+                int totalIce = currentLevelData.iceTiles != null ? currentLevelData.iceTiles.Count : 0;
+                objectiveUI.UpdateObjectiveProgress(
+                    LevelObjectiveType.ClearIce,
+                    totalIce - icetilesRemaining,
+                    totalIce
+                );
+            }
+        }
+    }
+    
+    // Enhanced win condition check
+    private bool CheckAllObjectivesComplete() {
+        if (currentLevelData == null || currentLevelData.objectives.Count == 0) {
+            // Fallback to old score-based system
+            return scoreManager != null && scoreManager.score >= levelGoal;
+        }
+        
+        foreach (var objective in currentLevelData.objectives) {
+            switch (objective.objectiveType) {
+                case LevelObjectiveType.Score:
+                case LevelObjectiveType.TimedChallenge:
+                    if (scoreManager == null || scoreManager.score < objective.targetScore)
+                        return false;
+                    break;
+                    
+                case LevelObjectiveType.CollectAnimals:
+                    if (!animalCollectionCount.ContainsKey(objective.animalTag) ||
+                        animalCollectionCount[objective.animalTag] < objective.targetAmount)
+                        return false;
+                    break;
+                    
+                case LevelObjectiveType.ClearIce:
+                    if (icetilesRemaining > 0)
+                        return false;
+                    break;
+            }
+        }
+        
+        return true;
+    }

@@ -11,10 +11,21 @@ public class ScoreManager : MonoBehaviour {
     public int comboMultiplier = 1;
 
     void Start() {
-        // FIXED: Updated to the new Unity 2023 syntax
+        // FIXED: Updated lookup logic to be more specific
         if (scoreText == null) {
-            scoreText = FindFirstObjectByType<TextMeshProUGUI>();
-            if(scoreText == null) Debug.LogError("SCORE MANAGER ERROR: No UI Text found in the scene!");
+            // First try to find by name "ScoreText"
+            GameObject scoreObj = GameObject.Find("ScoreText");
+            if (scoreObj != null) {
+                scoreText = scoreObj.GetComponent<TextMeshProUGUI>();
+            }
+            
+            // Fallback: Find first type but warn
+            if (scoreText == null) {
+                scoreText = FindFirstObjectByType<TextMeshProUGUI>();
+                if (scoreText != null) Debug.LogWarning("ScoreManager: Found a TextMeshProUGUI but unsure if it's the score. Please assign 'ScoreText' in Inspector.");
+            }
+
+            if(scoreText == null) Debug.LogError("SCORE MANAGER ERROR: No UI Text found in the scene! Create a TextMeshPro object named 'ScoreText'.");
         }
         
         UpdateScoreText();

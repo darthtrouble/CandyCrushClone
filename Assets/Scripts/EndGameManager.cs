@@ -23,8 +23,8 @@ public class EndGameManager : MonoBehaviour {
     public float oneStarPct = 0.5f;
     public float twoStarPct = 0.75f;
 
-    public void ShowWin(int currentScore, int levelGoal) {
-        Debug.Log("EndGameManager: ShowWin called!");
+    public void ShowWin(int currentScore, int starsEarned, int levelIndex) {
+        Debug.Log($"EndGameManager: ShowWin called! Stars: {starsEarned}");
 
         if (endPanel == null) {
             Debug.LogError("ERROR: 'End Panel' slot is empty in EndGameManager!");
@@ -53,7 +53,7 @@ public class EndGameManager : MonoBehaviour {
         if(replayButton) replayButton.SetActive(true);
         if(menuButton) menuButton.SetActive(true);
 
-        StartCoroutine(AnimateStars(currentScore, levelGoal));
+        StartCoroutine(AnimateStars(starsEarned));
     }
 
     public void ShowLose(int currentScore) {
@@ -74,13 +74,9 @@ public class EndGameManager : MonoBehaviour {
         if(menuButton) menuButton.SetActive(true);
     }
 
-    IEnumerator AnimateStars(int score, int goal) {
-        int starsEarned = 0;
-        if (score >= goal * oneStarPct) starsEarned = 1;
-        if (score >= goal * twoStarPct) starsEarned = 2;
-        if (score >= goal) starsEarned = 3;
-
-        for (int i = 0; i < starsEarned; i++) {
+    IEnumerator AnimateStars(int starsEarned) {
+        // Direct star count from objectives system
+        for (int i = 0; i < starsEarned && i < starImages.Length; i++) {
             yield return new WaitForSeconds(0.5f);
             
             if(starImages != null && i < starImages.Length && starImages[i] != null) {

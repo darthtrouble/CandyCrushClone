@@ -35,10 +35,10 @@ public class HintManager : MonoBehaviour {
 
     void MarkHint() {
         // Get the pair of dots from the board
-        List<GameObject> move = board.CheckForMatches();
+        List<Dot> move = board.CheckForMatches(); // Now returns Dot components
         
         if (move != null) {
-            foreach(GameObject dot in move) {
+            foreach(Dot dot in move) { // Changed from GameObject to Dot
                 if(dot != null) {
                     // Create a glow for this dot
                     GameObject newGlow = Instantiate(glowPrefab, dot.transform.position, Quaternion.identity);

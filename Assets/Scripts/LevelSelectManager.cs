@@ -10,10 +10,14 @@ public class LevelSelectManager : MonoBehaviour {
     public Button[] levelButtons; // Drag your buttons (Level 1, Level 2, etc.) here
     public Sprite lockedSprite;   // Optional: Sprite for a padlock
     public Sprite unlockedSprite; // Optional: Sprite for the number/star
+    
+    [Header("Star Display")]
+    public Sprite goldStarSprite;
+    public Sprite grayStarSprite;
 
     void Start() {
-        // 1. Get progress (Default to Level 1 if no save exists)
-        int unlockedLevel = PlayerPrefs.GetInt("UnlockedLevel", 1);
+        // 1. Get progress using LevelProgressManager
+        int unlockedLevel = LevelProgressManager.GetUnlockedLevel();
 
         // 2. Loop through all buttons
         for (int i = 0; i < levelButtons.Length; i++) {
@@ -31,6 +35,9 @@ public class LevelSelectManager : MonoBehaviour {
                 TextMeshProUGUI btnText = levelButtons[i].GetComponentInChildren<TextMeshProUGUI>();
                 if(btnText) btnText.text = levelNum.ToString();
                 
+                // Display stars earned for this level
+                DisplayStars(levelButtons[i], i);
+                
                 // Add Click Listener via Code (so you don't have to drag dropping manually)
                 int indexToLoad = i; // Local copy for the closure
                 levelButtons[i].onClick.AddListener(() => LoadLevel(indexToLoad));
@@ -45,6 +52,30 @@ public class LevelSelectManager : MonoBehaviour {
                 // Hide text or show lock
                 TextMeshProUGUI btnText = levelButtons[i].GetComponentInChildren<TextMeshProUGUI>();
                 if(btnText) btnText.text = ""; 
+            }
+        }
+    }
+    
+    private void DisplayStars(Button button, int levelIndex) {
+        // Find star images in button (assuming named "Star1", "Star2", "Star3")
+        Transform starsContainer = button.transform.Find("Stars");
+        if (starsContainer == null) return;
+        
+        int starsEarned = LevelProgressManager.GetStarsForLevel(levelIndex);
+        
+        for (int i = 0; i < 3; i++) {
+            Transform starTransform = starsContainer.Find("Star" + (i + 1));
+            if (starTransform != null) {
+                Image starImage = starTransform.GetComponent<Image>();
+                if (starImage != null) {
+                    if (i < starsEarned) {
+                        starImage.sprite = goldStarSprite;
+                        starImage.color = Color.white;
+                    } else {
+                        starImage.sprite = grayStarSprite;
+                        starImage.color = new Color(1f, 1f, 1f, 0.3f);
+                    }
+                }
             }
         }
     }
@@ -64,7 +95,7 @@ public class LevelSelectManager : MonoBehaviour {
     
     // Dev Tool: Call this to reset progress
     public void ResetProgress() {
-        PlayerPrefs.DeleteAll();
+        LevelProgressManager.ResetAllProgress();
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 }

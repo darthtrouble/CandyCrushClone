@@ -71,13 +71,13 @@ public class Dot : MonoBehaviour {
             targetY = row - board.centerOffset.y;
             
             transform.position = Vector2.Lerp(transform.position, new Vector2(targetX, targetY), .6f);
-            board.allDots[column, row] = this.gameObject;
+            board.allDots[column, row] = this; // Store this Dot component
             yield return null;
         }
         
         // Snap to final position
         transform.position = new Vector2(targetX, targetY);
-        board.allDots[column, row] = this.gameObject;
+        board.allDots[column, row] = this; // Store this Dot component
     }
 
     public void CalculateMove(float swipeAngle) {
@@ -89,7 +89,7 @@ public class Dot : MonoBehaviour {
     }
 
     void MovePieces(Vector2 direction) {
-        otherDot = board.allDots[column + (int)direction.x, row + (int)direction.y];
+        otherDot = board.allDots[column + (int)direction.x, row + (int)direction.y]?.gameObject; // Get GameObject from Dot
         if (otherDot != null) {
             Dot otherScript = otherDot.GetComponent<Dot>();
 
@@ -105,8 +105,8 @@ public class Dot : MonoBehaviour {
             int tempCol = column; int tempRow = row;
             column = otherScript.column; row = otherScript.row;
             otherScript.column = tempCol; otherScript.row = tempRow;
-            board.allDots[column, row] = this.gameObject;
-            board.allDots[otherScript.column, otherScript.row] = otherDot;
+            board.allDots[column, row] = this; // Store components
+            board.allDots[otherScript.column, otherScript.row] = otherScript;
             
             // Trigger movement animations
             StartMoving();
@@ -227,8 +227,8 @@ public class Dot : MonoBehaviour {
                 int tempCol = column; int tempRow = row;
                 column = otherScript.column; row = otherScript.row;
                 otherScript.column = tempCol; otherScript.row = tempRow;
-                board.allDots[column, row] = this.gameObject;
-                board.allDots[otherScript.column, otherScript.row] = otherDot;
+                board.allDots[column, row] = this; // Store components
+                board.allDots[otherScript.column, otherScript.row] = otherScript;
                 
                 // Trigger movement animations for swap back
                 StartMoving();
@@ -257,7 +257,7 @@ public class Dot : MonoBehaviour {
         for (int i = 0; i < board.width; i++) {
             for (int j = 0; j < board.height; j++) {
                 if (board.allDots[i, j] != null) {
-                    Dot d = board.allDots[i, j].GetComponent<Dot>();
+                    Dot d = board.allDots[i, j]; // Direct access, no GetComponent
                     
                     if (d.tag == targetTag) {
                         d.isRowBomb = false;
@@ -282,7 +282,7 @@ public class Dot : MonoBehaviour {
         for (int i = 0; i < board.width; i++) {
             for (int j = 0; j < board.height; j++) {
                 if (board.allDots[i, j] != null) {
-                    Dot d = board.allDots[i, j].GetComponent<Dot>();
+                    Dot d = board.allDots[i, j]; // Direct access
                     
                     if (d.tag == targetTag) {
                         d.isMatched = true;
@@ -374,7 +374,7 @@ public class Dot : MonoBehaviour {
 
     bool HasMatch(int checkCol, int checkRow) {
         if (checkCol >= 0 && checkCol < board.width && checkRow >= 0 && checkRow < board.height) {
-            GameObject neighbor = board.allDots[checkCol, checkRow];
+            Dot neighbor = board.allDots[checkCol, checkRow]; // Direct Dot access
             if (neighbor != null) return neighbor.tag == this.tag;
         }
         return false;
@@ -382,11 +382,10 @@ public class Dot : MonoBehaviour {
 
     void MarkNeighbor(int checkCol, int checkRow) {
         if (checkCol >= 0 && checkCol < board.width && checkRow >= 0 && checkRow < board.height) {
-            GameObject neighbor = board.allDots[checkCol, checkRow];
+            Dot neighbor = board.allDots[checkCol, checkRow]; // Direct Dot access
             if (neighbor != null) {
-                Dot d = neighbor.GetComponent<Dot>();
-                d.isMatched = true;
-                d.otherDot = null; // Reset their swipe memory so they don't try to become bombs!
+                neighbor.isMatched = true; // Direct property access
+                neighbor.otherDot = null; // Reset their swipe memory so they don't try to become bombs!
             }
         }
     }
@@ -407,6 +406,30 @@ public class Dot : MonoBehaviour {
             if (isRowBomb && rowArrow != null) rowArrow.SetActive(true);
             if (isColumnBomb && columnArrow != null) columnArrow.SetActive(true);
         }
+    }
+
+    public void MakeRowBomb() {
+        isRowBomb = true;
+        isColumnBomb = false;
+        isAreaBomb = false;
+        isColorBomb = false;
+        ActivateBombVisual();
+    }
+
+    public void MakeColumnBomb() {
+        isRowBomb = false;
+        isColumnBomb = true;
+        isAreaBomb = false;
+        isColorBomb = false;
+        ActivateBombVisual();
+    }
+
+    public void MakeAreaBomb() {
+        isRowBomb = false;
+        isColumnBomb = false;
+        isAreaBomb = true;
+        isColorBomb = false;
+        ActivateBombVisual();
     }
 
     // Function to take damage (Called by Board)
