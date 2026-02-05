@@ -4,13 +4,13 @@
 TagManager:
   serializedVersion: 3
   tags:
-  - Bear
-  - Bird
-  - Chick
-  - Parrot
   - Penguin
   - ColorBomb
   - Box
+  - Fox
+  - Frog
+  - Lion
+  - Owl
   layers:
   - Default
   - TransparentFX

@@ -16,16 +16,33 @@ public class BackgroundTile : MonoBehaviour {
         UpdateSprite();
     }
 
+    public Sprite iceSprite; // Assign in Inspector
+
     void UpdateSprite() {
         if (hitPoints <= 0) {
             hitPoints = 0;
-            // CHANGE: Set Alpha (last number) to 0 so it is INVISIBLE
+            // Invisible when destroyed
             spriteRenderer.color = new Color(1f, 1f, 1f, 0f); 
         } 
         else {
-            // CHANGE: Set Alpha to 1 so the ICE is VISIBLE
-            // (You can tweak these numbers for different ice shades)
-            spriteRenderer.color = new Color(0.5f, 0.8f, 1f, 0.8f);
+            // ICE STATE
+            if (iceSprite != null) {
+                // 1. Transparency: Set alpha to 0.4f (was 0.6f)
+                spriteRenderer.sprite = iceSprite;
+                spriteRenderer.color = new Color(1f, 1f, 1f, 0.4f);
+                
+                // 2. Sorting: Put ON TOP of animals
+                // "Units" is the layer animals are on. Order 10 puts it above them (usually 0)
+                spriteRenderer.sortingLayerName = "Units"; 
+                spriteRenderer.sortingOrder = 10;
+                
+                // 3. Size: Start at 0.5 (was 0.6)
+                transform.localScale = new Vector3(0.5f, 0.5f, 1f);
+            }
+            else {
+                // Fallback: Tint the existing sprite blue
+                spriteRenderer.color = new Color(0.5f, 0.8f, 1f, 0.8f);
+            }
         }
     }
 }

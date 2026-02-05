@@ -18,7 +18,7 @@ MonoBehaviour:
   objectives:
   - objectiveType: 1
     targetScore: 0
-    animalTag: Bear
+    animalTag: Fox
     targetAmount: 10
     timeLimit: 0
   oneStarScore: 600

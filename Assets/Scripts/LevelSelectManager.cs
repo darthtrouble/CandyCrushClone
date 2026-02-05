@@ -18,6 +18,10 @@ public class LevelSelectManager : MonoBehaviour {
     void Start() {
         // 1. Get progress using LevelProgressManager
         int unlockedLevel = LevelProgressManager.GetUnlockedLevel();
+        
+        // Load the Custom Round Button Sprite
+        Sprite roundBtn = Resources.Load<Sprite>("Sprites/roundButton");
+        if(roundBtn == null) Debug.LogWarning("Could not load 'Sprites/roundButton' from Resources.");
 
         // 2. Loop through all buttons
         for (int i = 0; i < levelButtons.Length; i++) {
@@ -28,8 +32,9 @@ public class LevelSelectManager : MonoBehaviour {
                 // --- UNLOCKED ---
                 levelButtons[i].interactable = true;
                 
-                // Visuals (Optional)
-                if(unlockedSprite != null) levelButtons[i].image.sprite = unlockedSprite;
+                // Visuals: Prioritize roundButton, fallback to unlockedSprite
+                if(roundBtn != null) levelButtons[i].image.sprite = roundBtn;
+                else if(unlockedSprite != null) levelButtons[i].image.sprite = unlockedSprite;
                 
                 // Set the text to the number (e.g. "1")
                 TextMeshProUGUI btnText = levelButtons[i].GetComponentInChildren<TextMeshProUGUI>();

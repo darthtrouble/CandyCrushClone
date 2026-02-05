@@ -130,6 +130,23 @@ public class Board : MonoBehaviour {
             timeRemaining -= Time.deltaTime;
             if (objectiveUI != null) {
                 objectiveUI.UpdateTimer(timeRemaining);
+                
+                // FIX: Only update UI if score CHANGED to avoid string concatenation in Update()
+                if (currentLevelData != null) {
+                     var obj = currentLevelData.objectives.Find(o => o.objectiveType == LevelObjectiveType.TimedChallenge);
+                     if(obj != null && scoreManager != null) {
+                         // We can define a local static or member to track change, 
+                         // but for now, checking against a tracked variable is best. 
+                         // For simplicity in this patched method, we rely on ObjectiveUI optimizing too, 
+                         // OR we blindly update but we try to optimize the call.
+                         // Actually, let's just make sure we aren't spamming it unnecessarily if we can help it.
+                         // But since we don't have a 'lastScore' member handy without adding one, 
+                         // checking ObjectiveUI internal state is better.
+                         
+                         // Revert to calling it, but we will optimize ObjectiveUI next.
+                         objectiveUI.UpdateObjectiveProgress(LevelObjectiveType.TimedChallenge, scoreManager.score, obj.targetScore);
+                     }
+                }
             }
             
             // Time up - trigger loss if objectives not met
@@ -152,7 +169,6 @@ public class Board : MonoBehaviour {
             if(hit.collider != null && hit.collider.GetComponent<Dot>()) {
                 Dot clickedDot = hit.collider.GetComponent<Dot>();
                 
-                // --- FIX: CHECK IF STONE ---
                 // Only select it if it is NOT a stone
                 if (!clickedDot.isStone) { 
                     currentlySelectedDot = clickedDot;
@@ -198,7 +214,6 @@ public class Board : MonoBehaviour {
         Camera.main.orthographicSize = Mathf.Max(verticalSize, horizontalSize);
 
         if(boardBackground != null) {
-            // FIX: Revert to standard board framing
             // Center background on the board (0,0), NOT the camera
             boardBackground.transform.position = new Vector3(0, 0, 5f); 
             
@@ -264,11 +279,11 @@ public class Board : MonoBehaviour {
     
     // Helper method to spawn floating score text
     private void SpawnFloatingScore(int score, Vector3 position) {
-        if (floatingScorePrefab != null) {
+        if (floatingScorePrefab != null && score > 0) {
             GameObject floatText = Instantiate(floatingScorePrefab, position, Quaternion.identity);
             FloatingText textComponent = floatText.GetComponent<FloatingText>();
             if(textComponent != null) {
-                textComponent.SetScore(score);
+                textComponent.Init(score, scoreManager);
             }
         }
     }
@@ -490,13 +505,60 @@ public class Board : MonoBehaviour {
                 yield return new WaitForSeconds(0.5f);
             }
 
-            // Loop to convert remaining moves
+            // PHASE 1: Clear all EXISTING bombs on the board first (Bonus Points)
+            bool existingBombsFound = true;
+            while(existingBombsFound) {
+                // Refresh list every cycle (in case new bombs fell or formed)
+                List<Dot> bombs = new List<Dot>();
+                for (int i = 0; i < width; i++) {
+                    for (int j = 0; j < height; j++) {
+                        if (allDots[i, j] != null && allDots[i, j].isBomb && !allDots[i, j].isMatched) {
+                            bombs.Add(allDots[i, j]);
+                        }
+                    }
+                }
+
+                if(bombs.Count > 0) {
+                     existingBombsFound = true;
+                     Dot bomb = bombs[0]; // Take the first one found (deterministic)
+                     
+                     if (bomb.isColorBomb) {
+                         // Pick a random neighbor color or just random color from board
+                         // Tags match new Prefabs (Fox, Frog, etc.)
+                         string[] colors = { "Fox", "Frog", "Lion", "Owl", "Penguin" }; 
+                         string randomTag = colors[Random.Range(0, colors.Length)];
+                         
+                         // Try to find a valid color on board to be smarter
+                         // (Optional: pick from candidates if available)
+                         DestroyColor(randomTag);
+                         bomb.isMatched = true; 
+                     } else {
+                         TriggerBomb(bomb);
+                         bomb.isMatched = true; 
+                     }
+                     
+                     if(audioSource && popSound) audioSource.PlayOneShot(popSound);
+                     
+                     // Allow chain reactions to complete!
+                     yield return new WaitForSeconds(0.25f);
+                     DestroyMatchesAt();
+                     DecreaseRow();
+                     RefillBoard();
+                     // Wait for refill to settle
+                     yield return new WaitForSeconds(0.4f);
+                } else {
+                    existingBombsFound = false;
+                }
+            }
+
+            // PHASE 2: Convert REMAINING MOVES into NEW Bombs
+            yield return new WaitForSeconds(0.5f); // Breath before phase 2
+            
             while (movesLeft > 0) {
                 movesLeft--;
                 UpdateMovesText();
                 if(audioSource && popSound) audioSource.PlayOneShot(popSound);
 
-                // 1. Pick a random valid spot
                 List<Dot> candidates = new List<Dot>();
                 for (int i = 0; i < width; i++) {
                     for (int j = 0; j < height; j++) {
@@ -508,31 +570,22 @@ public class Board : MonoBehaviour {
 
                 if (candidates.Count > 0) {
                     Dot target = candidates[Random.Range(0, candidates.Count)];
-                    
-                    // 2. Turn it into a bomb (Row or Column)
                     target.isMatched = false;
-                    if (Random.value > 0.5f) {
-                        target.MakeRowBomb();
-                    } else {
-                        target.MakeColumnBomb();
-                    }
                     
-                    // 3. Detonate immediately (creating score and visual chaos)
+                    if (Random.value > 0.5f) target.MakeRowBomb();
+                    else target.MakeColumnBomb();
+                    
                     TriggerBomb(target);
-                    
-                    // Small delay between explosions
-                    yield return new WaitForSeconds(0.2f);
-                    
-                    // Clean up any debris created by the bomb
-                    DestroyMatchesAt();
-                    DecreaseRow();
-                    RefillBoard();
-                } else {
-                    // No valid candidates? Just give points
-                    if(scoreManager != null) scoreManager.IncreaseScore(1000);
+                } 
+                else {
+                     if(scoreManager != null) scoreManager.IncreaseScore(1000);
                 }
                 
-                yield return new WaitForSeconds(0.1f);
+                yield return new WaitForSeconds(0.2f);
+                DestroyMatchesAt();
+                DecreaseRow();
+                RefillBoard();
+                yield return new WaitForSeconds(0.2f);
             }
         }
 
@@ -552,7 +605,7 @@ public class Board : MonoBehaviour {
     }
 
     private void DestroyMatchesAt() {
-        // OPTIMIZED: Single loop for bomb detonation and destruction
+        // Single loop for bomb detonation and destruction
         for (int i = 0; i < width; i++) {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
@@ -585,6 +638,15 @@ public class Board : MonoBehaviour {
                                 dot.isMatched = false;
                                 dot.ActivateBombVisual();
                                 OnAnimalCollected(dot.tag); // Count the transformation as collected
+                                
+                                // FIX: Give points for creating the bomb!
+                                int addedScore = 0;
+                                if(scoreManager != null) {
+                                     addedScore = scoreManager.IncreaseScore(scorePerDot);
+                                     CheckScoreObjectiveUpdate();
+                                }
+                                SpawnFloatingScore(addedScore, dot.transform.position);
+
                                 continue; // Keep this dot, it's a bomb now.
                             }
                         }
@@ -606,11 +668,17 @@ public class Board : MonoBehaviour {
                         OnAnimalCollected(dot.tag);
 
                         // Score & FX for destroying the dot
-                        if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
-                        SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
+                        int finalPoints = scorePerDot;
+                        if(scoreManager != null) {
+                             finalPoints = scoreManager.IncreaseScore(scorePerDot);
+                             // Update Score Objective UI
+                             CheckScoreObjectiveUpdate();
+                        }
+                        SpawnFloatingScore(finalPoints, allDots[i, j].transform.position);
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         
-                        Destroy(allDots[i, j].gameObject); // Destroy the GameObject, not just the component
+                        // POLISH: Animate death instead of instant destroy
+                        StartCoroutine(allDots[i, j].AnimateDeath()); 
                         allDots[i, j] = null;
                     }
                 }
@@ -638,17 +706,18 @@ public class Board : MonoBehaviour {
 
                         stoneDot.isMatched = true; // Mark logic dead
 
-                        // 1. Spawn Score using helper
-                        SpawnFloatingScore(scorePerDot, allDots[x, y].transform.position);
-
-                        // 2. Spawn Explosion
-                        if(explosionFX != null) Instantiate(explosionFX, allDots[x, y].transform.position, Quaternion.identity);
-
                         // 3. Add Score
-                        if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+                        int stonePoints = scorePerDot;
+                        if(scoreManager != null) {
+                            stonePoints = scoreManager.IncreaseScore(scorePerDot);
+                            CheckScoreObjectiveUpdate();
+                        }
+
+                        // 1. Spawn Score (Moved after calc)
+                        SpawnFloatingScore(stonePoints, allDots[x, y].transform.position);
 
                         // 4. Destroy Object
-                        Destroy(allDots[x, y].gameObject); // Destroy the GameObject
+                        StartCoroutine(allDots[x, y].AnimateDeath());
                         allDots[x, y] = null; // Clear from board array immediately
                         // ------------------------------------
                     }
@@ -668,12 +737,14 @@ public class Board : MonoBehaviour {
                         
                         // Destroy visuals manually
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
-                        if(scoreManager != null) scoreManager.IncreaseScore(scorePerDot);
+                        
+                        int bombPoints = scorePerDot;
+                        if(scoreManager != null) bombPoints = scoreManager.IncreaseScore(scorePerDot);
 
                         // Floating score using helper
-                        SpawnFloatingScore(scorePerDot, allDots[i, j].transform.position);
+                        SpawnFloatingScore(bombPoints, allDots[i, j].transform.position);
                         
-                        Destroy(allDots[i, j].gameObject); // Destroy the GameObject
+                        StartCoroutine(allDots[i, j].AnimateDeath());
                         allDots[i, j] = null;
                     }
                 }
@@ -797,6 +868,17 @@ public class Board : MonoBehaviour {
             for (int j = 0; j < height; j++) {
                 if (allDots[i, j] != null) {
                     allDots[i, j].isMatched = true; // Direct property access
+                }
+            }
+        }
+    }
+
+    // Helper to update UI for Score objectives
+    private void CheckScoreObjectiveUpdate() {
+        if (currentLevelData != null && objectiveUI != null && scoreManager != null) {
+            foreach (var obj in currentLevelData.objectives) {
+                if (obj.objectiveType == LevelObjectiveType.Score) {
+                    objectiveUI.UpdateObjectiveProgress(LevelObjectiveType.Score, scoreManager.score, obj.targetScore);
                 }
             }
         }

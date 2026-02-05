@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
+using System.Collections;
 using System.Collections.Generic;
 
 /// <summary>
@@ -15,7 +16,6 @@ public class ObjectiveUI : MonoBehaviour {
     
     [Header("Optional Specific Elements")]
     public TextMeshProUGUI timerText; // For timed challenges
-    public GameObject objectivePrefab; // Legacy support (not used if null)
     
     [Header("Layout Settings")]
     public float verticalOffset = -50f; // Move down by default
@@ -68,9 +68,7 @@ public class ObjectiveUI : MonoBehaviour {
         activeObjectives.Clear();
         
         // Create UI for each objective
-        foreach (var objective in objectives) {
-            CreateObjectiveUI(objective);
-        }
+        StartCoroutine(SpawnObjectivesSequence(objectives));
         
         // Show/hide timer based on objectives
         if (timerText != null) {
@@ -83,6 +81,14 @@ public class ObjectiveUI : MonoBehaviour {
         // Ensure Title is at top (if it exists)
         Transform titleTr = objectivePanel.transform.Find("Title");
         if (titleTr != null) titleTr.SetAsFirstSibling();
+    }
+    
+    // Polish: Spawn items one by one
+    private IEnumerator SpawnObjectivesSequence(List<LevelObjective> objectives) {
+        foreach (var objective in objectives) {
+            CreateObjectiveUI(objective);
+            yield return new WaitForSeconds(0.1f);
+        }
     }
 
     private void AutoCreateUI() {
@@ -103,8 +109,6 @@ public class ObjectiveUI : MonoBehaviour {
              rt.sizeDelta = Vector2.zero;
              
              // Add SafeArea script if it exists in project
-             // We use reflection/component check to be safe
-             // (Assuming user has a SafeArea script based on file list)
              safeAreaObj.AddComponent<SafeArea>();
         }
 
@@ -123,19 +127,18 @@ public class ObjectiveUI : MonoBehaviour {
                 rt.anchorMax = new Vector2(0, 1);
                 rt.pivot = new Vector2(0, 1);
                 rt.anchoredPosition = new Vector2(20, -20);
-                // Size handled by Fitter
             }
 
             // Add Background
             Image img = objectivePanel.GetComponent<Image>();
             if (img == null) img = objectivePanel.AddComponent<Image>();
-            img.color = new Color(0.1f, 0.1f, 0.1f, 0.8f); // Dark semi-transparent
-            img.raycastTarget = false; // OPTIMIZATION: Panel background needs no input
+            img.color = new Color(0.1f, 0.1f, 0.1f, 0.8f); 
+            img.raycastTarget = false; 
 
             // Add Layout Group to PANEL (Vertical: Title -> Timer -> Container)
             VerticalLayoutGroup vlg = objectivePanel.GetComponent<VerticalLayoutGroup>();
             if (vlg == null) vlg = objectivePanel.AddComponent<VerticalLayoutGroup>();
-            vlg.padding = new RectOffset(15, 15, 15, 15); // Increased padding
+            vlg.padding = new RectOffset(15, 15, 15, 15); 
             vlg.spacing = 8;
             vlg.childControlWidth = true;
             vlg.childControlHeight = true;
@@ -145,15 +148,14 @@ public class ObjectiveUI : MonoBehaviour {
             // Add Content Size Fitter because user wants it to resize
             ContentSizeFitter csf = objectivePanel.GetComponent<ContentSizeFitter>();
             if (csf == null) csf = objectivePanel.AddComponent<ContentSizeFitter>();
-            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained; // Fixed width set by LayoutElement or rect
+            csf.horizontalFit = ContentSizeFitter.FitMode.Unconstrained; 
             csf.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
             
             // Set width constraint
             LayoutElement le = objectivePanel.GetComponent<LayoutElement>();
             if (le == null) le = objectivePanel.AddComponent<LayoutElement>();
-            le.preferredWidth = 350; // Wider for larger text
+            le.preferredWidth = 350; 
         } else {
-            // Reparent if needed
              if (objectivePanel.transform.parent != safeAreaTr) {
                  objectivePanel.transform.SetParent(safeAreaTr, true);
              }
@@ -187,45 +189,34 @@ public class ObjectiveUI : MonoBehaviour {
             timerText = t.GetComponent<TextMeshProUGUI>();
             if (timerText == null) timerText = t.gameObject.AddComponent<TextMeshProUGUI>();
             
-            timerText.fontSize = 32; // Larger
+            timerText.fontSize = 32; 
             timerText.alignment = TextAlignmentOptions.Center;
             timerText.color = Color.white;
             timerText.fontStyle = FontStyles.Bold;
         }
-
-        // 4. FIX OTHER UI POSITIONS (Score & Moves)
-        // Manual setup required via Scene now.
     }
 
-    // Auto-creation and positioning removed per user request to use Scene/Inspector.
-    // Ensure you set up the UI in the scene:
-    // 1. ObjectivePanel under Canvas
-    // 2. ScoreText and MovesText in Top-Right
-    // 3. Fonts set to 40+
-
-
-    
     private void CreateObjectiveUI(LevelObjective objective) {
         if (objectiveContainer == null) return;
         
         GameObject objUI = new GameObject($"Objective_{objective.objectiveType}");
         objUI.transform.SetParent(objectiveContainer, false);
+        objUI.transform.localScale = Vector3.zero; // Start hidden for pop
         
         // Compact Design
         Image bg = objUI.AddComponent<Image>();
-        bg.color = new Color(0f, 0f, 0f, 0.3f); // Weaker background
-        bg.raycastTarget = false; // OPTIMIZATION: Background needs no input
+        bg.color = new Color(0f, 0f, 0f, 0.3f); 
+        bg.raycastTarget = false; 
         
         HorizontalLayoutGroup layout = objUI.AddComponent<HorizontalLayoutGroup>();
-        layout.padding = new RectOffset(10, 10, 5, 5); // Compact padding
+        layout.padding = new RectOffset(10, 10, 5, 5); 
         layout.spacing = 10;
         layout.childControlWidth = true;
         layout.childControlHeight = true;
         layout.childForceExpandWidth = false;
         
-        // Layout Element for height control
         LayoutElement selfLayout = objUI.AddComponent<LayoutElement>();
-        selfLayout.minHeight = 50; // Much smaller (was 80)
+        selfLayout.minHeight = 50; 
         selfLayout.flexibleWidth = 1;
         
         // Description
@@ -233,12 +224,12 @@ public class ObjectiveUI : MonoBehaviour {
         descObj.transform.SetParent(objUI.transform, false);
         TextMeshProUGUI descText = descObj.AddComponent<TextMeshProUGUI>();
         descText.text = objective.GetDescription();
-        descText.fontSize = 40; // Larger font for mobile
+        descText.fontSize = 40; 
         descText.color = Color.white;
         descText.alignment = TextAlignmentOptions.Left;
         descText.overflowMode = TextOverflowModes.Ellipsis;
         descText.textWrappingMode = TextWrappingModes.NoWrap;
-        descText.raycastTarget = false; // OPTIMIZATION: Text needs no input
+        descText.raycastTarget = false; 
         
         LayoutElement descLayout = descObj.AddComponent<LayoutElement>();
         descLayout.flexibleWidth = 1;
@@ -249,14 +240,14 @@ public class ObjectiveUI : MonoBehaviour {
         TextMeshProUGUI progText = progObj.AddComponent<TextMeshProUGUI>();
         
         int targetVal = (objective.objectiveType == LevelObjectiveType.Score) ? objective.targetScore : objective.targetAmount;
-        if (objective.objectiveType == LevelObjectiveType.TimedChallenge) targetVal = (int)objective.timeLimit; // Just visual placeholder really
+        if (objective.objectiveType == LevelObjectiveType.TimedChallenge) targetVal = (int)objective.timeLimit; 
 
         progText.text = (objective.objectiveType == LevelObjectiveType.TimedChallenge && objective.targetScore == 0) ? "" : $"0/{targetVal}";
-        progText.fontSize = 42; // Even larger for numbers
+        progText.fontSize = 42; 
         progText.fontStyle = FontStyles.Bold;
         progText.color = Color.yellow;
         progText.alignment = TextAlignmentOptions.Right;
-        progText.raycastTarget = false; // OPTIMIZATION
+        progText.raycastTarget = false; 
         
         LayoutElement progLayout = progObj.AddComponent<LayoutElement>();
         progLayout.minWidth = 70;
@@ -265,13 +256,26 @@ public class ObjectiveUI : MonoBehaviour {
         GameObject checkObj = new GameObject("Checkmark");
         checkObj.transform.SetParent(objUI.transform, false);
         Image checkImg = checkObj.AddComponent<Image>();
-        checkImg.color = completedColor;
-        checkImg.raycastTarget = false; // OPTIMIZATION
+        
+        // FIX: Load a checkmark sprite, or fallback to a green box
+        Sprite checkSprite = Resources.Load<Sprite>("Sprites/checkmark");
+        if(checkSprite != null) {
+            checkImg.sprite = checkSprite;
+            checkImg.color = Color.white; 
+            checkImg.preserveAspect = true; // Fix distortion
+        } else {
+            checkImg.color = completedColor; 
+        }
+
+        checkImg.raycastTarget = false; 
         checkObj.SetActive(false);
         
         LayoutElement checkLayout = checkObj.AddComponent<LayoutElement>();
-        checkLayout.minWidth = 30;
-        checkLayout.minHeight = 30;
+        // Smaller size constraint (was min 30 unconstrained)
+        checkLayout.minWidth = 25;
+        checkLayout.minHeight = 25;
+        checkLayout.preferredWidth = 25;
+        checkLayout.preferredHeight = 25;
         
         activeObjectives.Add(new ObjectiveItem {
             uiObject = objUI,
@@ -280,6 +284,9 @@ public class ObjectiveUI : MonoBehaviour {
             progressText = progText,
             checkmark = checkImg
         });
+        
+        // Trigger Pop In
+        StartCoroutine(PunchEffect(objUI.transform));
     }
     
     public void UpdateObjectiveProgress(LevelObjectiveType type, int current, int target, string animalTag = null) {
@@ -293,7 +300,16 @@ public class ObjectiveUI : MonoBehaviour {
             }
 
             if (typeMatch && tagMatch && !item.isCompleted) {
-                if (item.progressText != null) item.progressText.text = $"{current}/{target}";
+                // Optimize: Only update text if value CHANGED
+                // We hijack 'lastCurrentVal' (which we need to add to class) or just compare strings?
+                // Adding a quick check:
+                string newText = $"{current}/{target}";
+                if (item.progressText != null && item.progressText.text != newText) {
+                     item.progressText.text = newText;
+                     // Small pulse on update
+                     if(item.uiObject != null && gameObject.activeInHierarchy) StartCoroutine(PunchEffect(item.uiObject.transform, 1.05f));
+                }
+                
                 if (current >= target) MarkObjectiveComplete(item);
             }
         }
@@ -306,21 +322,56 @@ public class ObjectiveUI : MonoBehaviour {
             int minutes = Mathf.FloorToInt(timeRemaining / 60);
             int seconds = Mathf.FloorToInt(timeRemaining % 60);
             
-            // OPTIMIZATION: Only update text if the value actually changed
             if (seconds != lastSecondsTimer) {
                 lastSecondsTimer = seconds;
                 timerText.text = $"{minutes:00}:{seconds:00}";
-                if (timeRemaining < 10f) timerText.color = timerWarningColor;
+                if (timeRemaining < 10f) {
+                     timerText.color = timerWarningColor;
+                     // Heartbeat effect
+                     StartCoroutine(PunchEffect(timerText.transform, 1.2f));
+                }
             }
         }
     }
     
     private void MarkObjectiveComplete(ObjectiveItem item) {
+        if(item.isCompleted) return;
+        
         item.isCompleted = true;
-        if (item.checkmark != null) item.checkmark.gameObject.SetActive(true);
+        
+        // Show text green instead of hiding it
         if (item.progressText != null) {
-            item.progressText.text = "";
-            item.progressText.gameObject.SetActive(false);
+            item.progressText.color = completedColor; 
         }
+
+        // Show and animate checkmark
+        if (item.checkmark != null) {
+            item.checkmark.gameObject.SetActive(true);
+            item.checkmark.transform.localScale = Vector3.zero;
+            StartCoroutine(PunchEffect(item.checkmark.transform, 1.5f));
+        }
+    }
+    
+    // JUICE: Elastic Scale Effect
+    private IEnumerator PunchEffect(Transform target, float scale = 1.1f) {
+        Vector3 original = Vector3.one;
+        if(target == null) yield break;
+
+        float elapsed = 0f;
+        float duration = 0.3f;
+        
+        while(elapsed < duration) {
+            if(target == null) yield break;
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            
+            // Elastic Punch
+            // Sin wave dampening
+            float s = Mathf.Sin(t * Mathf.PI) * (scale - 1f); 
+            target.localScale = original + (original * s);
+            
+            yield return null;
+        }
+        if(target != null) target.localScale = original;
     }
 }

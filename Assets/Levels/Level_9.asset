@@ -18,7 +18,7 @@ MonoBehaviour:
   objectives:
   - objectiveType: 1
     targetScore: 0
-    animalTag: Parrot
+    animalTag: Frog
     targetAmount: 15
     timeLimit: 0
   - objectiveType: 2

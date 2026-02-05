@@ -29,7 +29,6 @@ public class Dot : MonoBehaviour {
     private Vector3 originalScale; 
     private Board board;
     private GameObject otherDot; // The tile I swapped with
-    private Vector3 firstTouchPosition;
 
     void Awake() {
         originalScale = transform.localScale;
@@ -39,17 +38,50 @@ public class Dot : MonoBehaviour {
         column = x;
         row = y;
         board = boardRef;
-        transform.localScale = originalScale;
+        transform.localScale = Vector3.zero; // Start small for pop-in
+        StartCoroutine(PopInAnimation());
         StartMoving(); // Trigger movement animation
     }
 
+    private IEnumerator PopInAnimation() {
+        float elapsed = 0;
+        float duration = 0.3f;
+        while(elapsed < duration) {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            // EaseOutBack
+            float back = 1 + 2.70158f * Mathf.Pow(t - 1, 3) + 1.70158f * Mathf.Pow(t - 1, 2);
+            // Manual Lerp Unclamped
+            transform.localScale = Vector3.zero + (originalScale - Vector3.zero) * back;
+            yield return null;
+        }
+        transform.localScale = originalScale;
+    }
+
+    private Coroutine pulseCoroutine;
+
     // Update OnMouseDown to PREVENT moving/swapping stones
     private void OnMouseDown() {
-        // --- ADD THIS BLOCK ---
         if (isStone || board.currentState != GameState.move) return;
-        // ---------------------
         
-        firstTouchPosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        // VISUAL PULSE
+        if(pulseCoroutine != null) StopCoroutine(pulseCoroutine);
+        pulseCoroutine = StartCoroutine(PulseSelection(1.2f));
+    }
+
+    private void OnMouseUp() {
+        // Return to normal size
+        if(pulseCoroutine != null) StopCoroutine(pulseCoroutine);
+        if(this != null) transform.localScale = originalScale;
+    }
+
+    private IEnumerator PulseSelection(float targetMult) {
+        Vector3 target = originalScale * targetMult;
+        while(Vector3.Distance(transform.localScale, target) > 0.05f) {
+            transform.localScale = Vector3.Lerp(transform.localScale, target, Time.deltaTime * 10f);
+            yield return null;
+        }
+        transform.localScale = target;
     }
 
     // Optimized: Only move when position changes instead of checking every frame
@@ -63,24 +95,39 @@ public class Dot : MonoBehaviour {
     private IEnumerator SmoothMove() {
         if(board == null) yield break;
         
-        float targetX = column - board.centerOffset.x;
-        float targetY = row - board.centerOffset.y;
+        Vector3 startPos = transform.position;
+        Vector3 targetPos = new Vector3(column - board.centerOffset.x, row - board.centerOffset.y, 0);
         
-        while (Mathf.Abs(targetX - transform.position.x) > .01f || Mathf.Abs(targetY - transform.position.y) > .01f) {
-            targetX = column - board.centerOffset.x;
-            targetY = row - board.centerOffset.y;
+        float dist = Vector3.Distance(startPos, targetPos);
+        if(dist < 0.01f) {
+           transform.position = targetPos;
+           yield break;
+        }
+
+        float duration = 0.2f; // Snappier!
+        // If falling far (refill), make it faster per unit, but clamp
+        if(dist > 1f) duration = 0.25f;
+
+        float elapsed = 0f;
+        while (elapsed < duration) {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
             
-            transform.position = Vector2.Lerp(transform.position, new Vector2(targetX, targetY), .6f);
-            board.allDots[column, row] = this; // Store this Dot component
+            // SmoothStep for nice landing
+            t = t * t * (3f - 2f * t);
+            
+            transform.position = Vector3.Lerp(startPos, targetPos, t);
             yield return null;
         }
         
         // Snap to final position
-        transform.position = new Vector2(targetX, targetY);
-        board.allDots[column, row] = this; // Store this Dot component
+        transform.position = targetPos;
     }
 
     public void CalculateMove(float swipeAngle) {
+        // Reset scale first
+        OnMouseUp();
+
         if (swipeAngle > -45 && swipeAngle <= 45 && column < board.width - 1) MovePieces(Vector2.right);
         else if (swipeAngle > 45 && swipeAngle <= 135 && row < board.height - 1) MovePieces(Vector2.up);
         else if ((swipeAngle > 135 || swipeAngle <= -135) && column > 0) MovePieces(Vector2.left);
@@ -126,11 +173,8 @@ public class Dot : MonoBehaviour {
         // --- 1. DOUBLE COLOR BOMB (Nuke) ---
         if (isColorBomb && otherScript.isColorBomb) {
             isMatched = true; otherScript.isMatched = true;
-            
-            // FIX: Untag them so they don't match anything else while exploding
             gameObject.tag = "Untagged";
             otherScript.gameObject.tag = "Untagged";
-            
             board.NukeBoard();
             board.DestroyMatches();
             yield break;
@@ -138,13 +182,11 @@ public class Dot : MonoBehaviour {
 
         // --- 2. COLOR BOMB + ANY BOMB (Transform) ---
         else if (isColorBomb && (otherScript.isRowBomb || otherScript.isColumnBomb || otherScript.isAreaBomb)) {
-            // FIX: Untag the Color Bomb immediately
             gameObject.tag = "Untagged";
             StartCoroutine(ColorBombComboRoutine(otherScript));
             yield break; 
         }
         else if (otherScript.isColorBomb && (isRowBomb || isColumnBomb || isAreaBomb)) {
-            // FIX: Untag the Color Bomb immediately
             otherScript.gameObject.tag = "Untagged";
             otherScript.StartCoroutine(otherScript.ColorBombComboRoutine(this));
             yield break;
@@ -153,21 +195,15 @@ public class Dot : MonoBehaviour {
         // --- 3. STRIPE + AREA (Mega Stripe) ---
         else if ((isRowBomb || isColumnBomb) && otherScript.isAreaBomb) {
             isMatched = true; otherScript.isMatched = true;
-            
-            // FIX: Untag both immediately so they execute ONLY this combo
             gameObject.tag = "Untagged";
             otherScript.gameObject.tag = "Untagged";
-            
             if (isRowBomb) board.DestroyRowStrip(row);
             else board.DestroyColumnStrip(column);
-            
             board.DestroyMatches();
             yield break;
         }
         else if (isAreaBomb && (otherScript.isRowBomb || otherScript.isColumnBomb)) {
             isMatched = true; otherScript.isMatched = true;
-            
-            // FIX: Untag both
             gameObject.tag = "Untagged";
             otherScript.gameObject.tag = "Untagged";
 
@@ -181,11 +217,8 @@ public class Dot : MonoBehaviour {
         // --- 4. STRIPE + STRIPE (Cross Blast) ---
         else if ((isRowBomb || isColumnBomb) && (otherScript.isRowBomb || otherScript.isColumnBomb)) {
             isMatched = true; otherScript.isMatched = true;
-            
-            // FIX: Untag both
             gameObject.tag = "Untagged";
             otherScript.gameObject.tag = "Untagged";
-            
             board.DestroyMatches();
             yield break; 
         }
@@ -193,11 +226,8 @@ public class Dot : MonoBehaviour {
         // --- 5. AREA + AREA (Double Pop Sequence) ---
         else if (isAreaBomb && otherScript.isAreaBomb) {
             otherScript.isMatched = true; 
-            
-            // FIX: Untag both. Crucial here because one stays alive for 0.5s!
             gameObject.tag = "Untagged";
             otherScript.gameObject.tag = "Untagged";
-            
             StartCoroutine(board.DoubleAreaBombRoutine(otherScript.column, otherScript.row, this));
             yield break;
         }
@@ -218,7 +248,7 @@ public class Dot : MonoBehaviour {
         
         // --- 7. STANDARD MOVES ---
         else {
-            yield return new WaitForSeconds(.2f);
+            yield return new WaitForSeconds(.3f); // Wait for move to finish
             FindMatches();
             if(otherDot != null) otherScript.FindMatches();
 
@@ -234,7 +264,7 @@ public class Dot : MonoBehaviour {
                 StartMoving();
                 otherScript.StartMoving();
                 
-                yield return new WaitForSeconds(.2f);
+                yield return new WaitForSeconds(.3f); 
                 board.currentState = GameState.move;
             } else {
                 board.DestroyMatches();
@@ -297,14 +327,8 @@ public class Dot : MonoBehaviour {
 
     public void FindMatches() {
         if (isStone) return; // Stones never match!
-
-        // FIX: If I am a Color Bomb, I NEVER match on my own. 
-        // I only explode via Swap (CheckMoveCo) or Explosion (Board.TriggerBomb)
         if (isColorBomb) return; 
 
-        // If I am a standard bomb (Row/Column/Area), I behave like a normal tile 
-        // so I CAN be matched to trigger my explosion.
-        
         // 1. Count Horizontal
         int leftCount = 0; int rightCount = 0;
         while (HasMatch(column - (leftCount + 1), row)) leftCount++;
@@ -332,10 +356,6 @@ public class Dot : MonoBehaviour {
         // Match 4 (Row Bomb - Horizontal)
         else if (totalHorizontal == 4) {
             isMatched = true;
-            
-            // PRIORITY CHECK:
-            // 1. If I was the one Swapped -> I become the bomb.
-            // 2. If nobody was Swapped (falling match) -> Left-most becomes bomb.
             if (otherDot != null || (!HasMatch(column - 1, row) && !isBomb)) {
                  if(!isBomb) isRowBomb = true;
             }
@@ -343,10 +363,6 @@ public class Dot : MonoBehaviour {
         // Match 4 (Column Bomb - Vertical)
         else if (totalVertical == 4) {
             isMatched = true;
-            
-            // PRIORITY CHECK:
-            // 1. If I was Swapped -> I become bomb.
-            // 2. Default -> Bottom-most becomes bomb.
             if (otherDot != null || (!HasMatch(column, row - 1) && !isBomb)) {
                 if(!isBomb) isColumnBomb = true;
             }
@@ -358,9 +374,6 @@ public class Dot : MonoBehaviour {
 
         // --- MARK NEIGHBORS (Death Loop) ---
         if (isMatched) {
-            // Important: If we made a bomb, we must STOP neighbors from becoming bombs too.
-            // We do this by "Using Up" the `otherDot` variable on neighbors so they fail the priority check.
-            
             if (totalHorizontal >= 3) {
                 for (int i = 1; i <= leftCount; i++) MarkNeighbor(column - i, row);
                 for (int i = 1; i <= rightCount; i++) MarkNeighbor(column + i, row);
@@ -385,18 +398,41 @@ public class Dot : MonoBehaviour {
             Dot neighbor = board.allDots[checkCol, checkRow]; // Direct Dot access
             if (neighbor != null) {
                 neighbor.isMatched = true; // Direct property access
-                neighbor.otherDot = null; // Reset their swipe memory so they don't try to become bombs!
+                neighbor.otherDot = null; // Reset their swipe memory
             }
         }
+    }
+
+    /// <summary>
+    /// Plays a shrink animation then destroys this object.
+    /// Call this instead of Destroy(gameObject).
+    /// </summary>
+    public IEnumerator AnimateDeath() {
+        // Disablecollider to prevent accidental clicks
+        Collider2D col = GetComponent<Collider2D>();
+        if(col) col.enabled = false;
+
+        float elapsed = 0;
+        float duration = 0.2f;
+        Vector3 startScale = transform.localScale;
+
+        while(elapsed < duration) {
+            elapsed += Time.deltaTime;
+            float t = elapsed / duration;
+            // BackIn curve for "suck in" effect
+            float val = 1 - (t * t * (2.70158f * t - 1.70158f)); 
+            transform.localScale = Vector3.zero + (startScale - Vector3.zero) * val;
+            yield return null;
+        }
+        
+        Destroy(gameObject);
     }
 
     public void ActivateBombVisual() {
         isBomb = true;
         
         if (isColorBomb) {
-            // FIX: Change Tag so it doesn't match with normal animals anymore
-            gameObject.tag = "ColorBomb"; // Or create a custom tag "ColorBomb"
-            
+            gameObject.tag = "ColorBomb"; 
             if(colorBombSprite != null) colorBombSprite.SetActive(true);
         }
         else if (isAreaBomb && areaBombSprite != null) {
@@ -409,38 +445,23 @@ public class Dot : MonoBehaviour {
     }
 
     public void MakeRowBomb() {
-        isRowBomb = true;
-        isColumnBomb = false;
-        isAreaBomb = false;
-        isColorBomb = false;
+        isRowBomb = true; isColumnBomb = false; isAreaBomb = false; isColorBomb = false;
         ActivateBombVisual();
     }
 
     public void MakeColumnBomb() {
-        isRowBomb = false;
-        isColumnBomb = true;
-        isAreaBomb = false;
-        isColorBomb = false;
+        isRowBomb = false; isColumnBomb = true; isAreaBomb = false; isColorBomb = false;
         ActivateBombVisual();
     }
 
     public void MakeAreaBomb() {
-        isRowBomb = false;
-        isColumnBomb = false;
-        isAreaBomb = true;
-        isColorBomb = false;
+        isRowBomb = false; isColumnBomb = false; isAreaBomb = true; isColorBomb = false;
         ActivateBombVisual();
     }
 
-    // Function to take damage (Called by Board)
     public bool TakeDamage(int damage) {
         health -= damage;
-        if (health <= 0) {
-            return true; // "Yes, I am dead."
-        } else {
-            // Optional: Show cracks
-            // GetComponent<SpriteRenderer>().sprite = stoneSprites[health - 1];
-            return false; // "I am still alive."
-        }
+        if (health <= 0) return true;
+        return false;
     }
 }

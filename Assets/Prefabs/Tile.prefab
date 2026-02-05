@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4617971700546054878}
   - component: {fileID: 7961443397905678857}
+  - component: {fileID: 8736631448444662866}
   m_Layer: 0
   m_Name: Tile
   m_TagString: Untagged
@@ -91,3 +92,17 @@ SpriteRenderer:
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_SpriteSortPoint: 0
+--- !u!114 &8736631448444662866
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2090589759406842964}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bb255ab76424413499851aa019e8f5b3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BackgroundTile
+  hitPoints: 0
+  iceSprite: {fileID: -856085545168688419, guid: 3a71b27e7fb926d48b818c717605240d, type: 3}
