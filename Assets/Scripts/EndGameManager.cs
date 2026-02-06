@@ -23,6 +23,16 @@ public class EndGameManager : MonoBehaviour {
     public float oneStarPct = 0.5f;
     public float twoStarPct = 0.75f;
 
+    [Header("Audio")]
+    public AudioClip winSound;
+    public AudioClip loseSound;
+    private AudioSource audioSource;
+
+    private void Awake() {
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+    }
+
     public void ShowWin(int currentScore, int starsEarned, int levelIndex) {
         Debug.Log($"EndGameManager: ShowWin called! Stars: {starsEarned}");
 
@@ -53,6 +63,15 @@ public class EndGameManager : MonoBehaviour {
         if(replayButton) replayButton.SetActive(true);
         if(menuButton) menuButton.SetActive(true);
 
+        if(audioSource) {
+            if (winSound != null) {
+                audioSource.PlayOneShot(winSound);
+            } else {
+                // Fallback to procedural
+                audioSource.PlayOneShot(ProceduralAudio.CreateWinClip());
+            }
+        }
+
         StartCoroutine(AnimateStars(starsEarned));
     }
 
@@ -72,6 +91,15 @@ public class EndGameManager : MonoBehaviour {
         if(nextLevelButton) nextLevelButton.SetActive(false);
         if(replayButton) replayButton.SetActive(true);
         if(menuButton) menuButton.SetActive(true);
+
+        if(audioSource) {
+            if (loseSound != null) {
+                audioSource.PlayOneShot(loseSound);
+            } else {
+                // Fallback to procedural
+                audioSource.PlayOneShot(ProceduralAudio.CreateLoseClip());
+            }
+        }
     }
 
     IEnumerator AnimateStars(int starsEarned) {

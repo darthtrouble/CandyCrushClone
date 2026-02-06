@@ -600,6 +600,7 @@ MonoBehaviour:
   board: {fileID: 1401473472}
   hintDelay: 7
   glowPrefab: {fileID: 6562818556918730223, guid: 16d9d2895063daa4eab9aba8c70fc16d, type: 3}
+  handPrefab: {fileID: 5741609509303576379, guid: 4f98b457cc18c274ca8f4ff05a38bd3d, type: 3}
 --- !u!4 &316615465
 Transform:
   m_ObjectHideFlags: 0
@@ -2587,7 +2588,6 @@ MonoBehaviour:
   objectivePanel: {fileID: 1058528842}
   objectiveContainer: {fileID: 477912865}
   timerText: {fileID: 2117506064}
-  objectivePrefab: {fileID: 4872930194827234065, guid: 9670f1e96931040448491554be61f0b6, type: 3}
   verticalOffset: -50
   completedColor: {r: 0, g: 1, b: 0, a: 1}
   timerWarningColor: {r: 1, g: 0, b: 0, a: 1}
@@ -4770,6 +4770,8 @@ MonoBehaviour:
   menuButton: {fileID: 455896635}
   oneStarPct: 0.5
   twoStarPct: 0.75
+  winSound: {fileID: 0}
+  loseSound: {fileID: 0}
 --- !u!4 &1901055292
 Transform:
   m_ObjectHideFlags: 0
@@ -4995,7 +4997,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 523.53827, y: -62.196453}
+  m_AnchoredPosition: {x: 523.5383, y: -62.19641}
   m_SizeDelta: {x: 700, y: 100}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1978321039

@@ -278,12 +278,24 @@ public class Board : MonoBehaviour {
     }
     
     // Helper method to spawn floating score text
-    private void SpawnFloatingScore(int score, Vector3 position) {
-        if (floatingScorePrefab != null && score > 0) {
-            GameObject floatText = Instantiate(floatingScorePrefab, position, Quaternion.identity);
-            FloatingText textComponent = floatText.GetComponent<FloatingText>();
-            if(textComponent != null) {
-                textComponent.Init(score, scoreManager);
+    private void SpawnFloatingScore(int points, Vector3 pos, string tag = "") {
+        if(floatingScorePrefab != null) { // Changed from scorePrefab to floatingScorePrefab to match existing variable
+            GameObject go = Instantiate(floatingScorePrefab, pos, Quaternion.identity);
+            FloatingText ft = go.GetComponent<FloatingText>();
+            if(ft != null) {
+                ft.Init(points, scoreManager);
+                
+                // Color Mapping based on Animal Tag
+                Color color = Color.white; // Default
+                switch(tag) {
+                    case "Fox": color = new Color(1f, 0.5f, 0f); break; // Orange
+                    case "Frog": color = new Color(0.2f, 0.8f, 0.2f); break; // Green
+                    case "Lion": color = new Color(1f, 0.8f, 0.2f); break; // Yellow/Gold
+                    case "Owl": color = new Color(0.6f, 0.2f, 0.8f); break; // Purple
+                    case "Penguin": color = new Color(0.2f, 0.6f, 1f); break; // Blue
+                    default: color = Color.white; break;
+                }
+                ft.SetColor(color);
             }
         }
     }
@@ -537,7 +549,11 @@ public class Board : MonoBehaviour {
                          bomb.isMatched = true; 
                      }
                      
-                     if(audioSource && popSound) audioSource.PlayOneShot(popSound);
+                     if(audioSource && popSound) {
+                         audioSource.pitch = Random.Range(0.85f, 1.15f);
+                         audioSource.PlayOneShot(popSound);
+                         audioSource.pitch = 1f;
+                     }
                      
                      // Allow chain reactions to complete!
                      yield return new WaitForSeconds(0.25f);
@@ -557,7 +573,11 @@ public class Board : MonoBehaviour {
             while (movesLeft > 0) {
                 movesLeft--;
                 UpdateMovesText();
-                if(audioSource && popSound) audioSource.PlayOneShot(popSound);
+                if(audioSource && popSound) {
+                     audioSource.pitch = Random.Range(0.85f, 1.15f);
+                     audioSource.PlayOneShot(popSound);
+                     audioSource.pitch = 1f;
+                }
 
                 List<Dot> candidates = new List<Dot>();
                 for (int i = 0; i < width; i++) {
@@ -645,7 +665,7 @@ public class Board : MonoBehaviour {
                                      addedScore = scoreManager.IncreaseScore(scorePerDot);
                                      CheckScoreObjectiveUpdate();
                                 }
-                                SpawnFloatingScore(addedScore, dot.transform.position);
+                                SpawnFloatingScore(addedScore, dot.transform.position, dot.tag);
 
                                 continue; // Keep this dot, it's a bomb now.
                             }
@@ -674,7 +694,7 @@ public class Board : MonoBehaviour {
                              // Update Score Objective UI
                              CheckScoreObjectiveUpdate();
                         }
-                        SpawnFloatingScore(finalPoints, allDots[i, j].transform.position);
+                        SpawnFloatingScore(finalPoints, allDots[i, j].transform.position, dot.tag);
                         if(explosionFX != null) Instantiate(explosionFX, allDots[i, j].transform.position, Quaternion.identity);
                         
                         // POLISH: Animate death instead of instant destroy
@@ -685,7 +705,11 @@ public class Board : MonoBehaviour {
             }
         }
         
-        if(popSound != null) audioSource.PlayOneShot(popSound);
+        if(popSound != null) {
+            audioSource.pitch = Random.Range(0.85f, 1.15f);
+            audioSource.PlayOneShot(popSound);
+            audioSource.pitch = 1f; // Reset for other sounds
+        }
         if(cameraShake != null) StartCoroutine(cameraShake.Shake(0.15f, 0.05f));
     }
 

@@ -1,10 +1,14 @@
 using UnityEngine;
-using UnityEngine.Audio; // Required for Mixer
+using UnityEngine.Audio;
+using UnityEngine.SceneManagement;
 
 public class BackgroundMusic : MonoBehaviour {
 
-    public AudioMixer mainMixer; // Drag your MainMixer here!
-
+    public AudioMixer mainMixer;
+    public AudioClip menuMusic;   // Drag your new menu music here (or leave null for procedural)
+    public AudioClip gameMusic;   // Drag your existing game music here
+    
+    private AudioSource audioSource;
     private static BackgroundMusic instance;
 
     void Awake() {
@@ -14,11 +18,36 @@ public class BackgroundMusic : MonoBehaviour {
         }
         instance = this;
         DontDestroyOnLoad(gameObject);
+        
+        audioSource = GetComponent<AudioSource>();
+        if(audioSource == null) audioSource = gameObject.AddComponent<AudioSource>();
+        
+        // Listen for scene changes
+        SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode) {
+        if (scene.name == "MainMenu" || scene.name == "LevelSelect") {
+            // Fallback to gameMusic (original user music) if no dedicated menu music is set
+            AudioClip clipToPlay = menuMusic != null ? menuMusic : gameMusic;
+            if(clipToPlay != null) PlayMusic(clipToPlay);
+        } else {
+            // Assume Game Level
+            if (gameMusic != null) PlayMusic(gameMusic);
+        }
+    }
+    
+    void PlayMusic(AudioClip clip) {
+        if (audioSource.clip == clip) return; // Don't restart if already playing
+        audioSource.clip = clip;
+        audioSource.loop = true;
+        audioSource.Play();
     }
 
     void Start() {
-        // Apply the saved volume immediately when the game starts
         ApplyVolume();
+        // Trigger manually for the first scene
+        OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
 
     public void ApplyVolume() {

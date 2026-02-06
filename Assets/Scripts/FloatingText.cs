@@ -30,7 +30,7 @@ public class FloatingText : MonoBehaviour {
         
         // --- POLISH: Force high sort order and scale up slightly on spawn ---
         textMesh.sortingOrder = 20; 
-        transform.localScale = Vector3.one * 0.15f; // Drastically smaller
+        transform.localScale = Vector3.one * 0.12f; // Drastically smaller (Reduced further)
 
         // Random X drift
         randomOffset = new Vector3(Random.Range(-0.2f, 0.2f), 1f, 0);
@@ -50,8 +50,8 @@ public class FloatingText : MonoBehaviour {
             transform.position += (Vector3.up * moveSpeed + randomOffset) * Time.deltaTime;
 
             // Pop scaling
-            // Target 0.25f is extremely compact
-            if(transform.localScale.x < 0.25f) {
+            // Target 0.2f is extremely compact
+            if(transform.localScale.x < 0.2f) {
                 transform.localScale += Vector3.one * Time.deltaTime * 2f; // Slower pop
             }
         }
@@ -79,7 +79,7 @@ public class FloatingText : MonoBehaviour {
 
                  // Lerp towards target
                  transform.position = Vector3.Lerp(transform.position, targetPos, Time.deltaTime * 8f);
-                 transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one * 0.1f, Time.deltaTime * 5f); 
+                 transform.localScale = Vector3.Lerp(transform.localScale, Vector3.one * 0.08f, Time.deltaTime * 5f); 
 
                  // Check arrival
                  if (Vector3.Distance(transform.position, targetPos) < 1.0f) {
@@ -101,5 +101,13 @@ public class FloatingText : MonoBehaviour {
     public void SetScore(int value) {
         if (textMesh == null) textMesh = GetComponent<TextMeshPro>();
         if (textMesh != null) textMesh.text = "+" + value;
+    }
+
+    public void SetColor(Color c) {
+        if (textMesh == null) textMesh = GetComponent<TextMeshPro>();
+        if (textMesh != null) {
+            textMesh.color = c;
+            textColor = c; // Update internal tracker for fading
+        }
     }
 }
